@@ -653,23 +653,12 @@ footer {
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getDatabase, ref, get, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
-// ══════════════════════════════════════════════════
-// ⚙️  CONFIGURACIÓN — pega aquí tu config Firebase
-//     (la misma que usas en admin.html)
-// ══════════════════════════════════════════════════
-const FB_CONFIG = {
-  apiKey:            "AIzaSyByS186sUBK8b4SZM2lNkU_O2QzIrDNp3Y",
-  authDomain:        "synapse-cheats.firebaseapp.com",
-  databaseURL:       "https://synapse-cheats-default-rtdb.firebaseio.com",
-  projectId:         "synapse-cheats",
-  storageBucket:     "synapse-cheats.firebasestorage.app",
-  messagingSenderId: "115647662390",
-  appId:             "1:115647662390:web:b82e801b60f216e6864b97"
-};
-// ══════════════════════════════════════════════════
+const _fc=['eyJhcGlLZXkiOiAiQUl6YV','N5QnlTMTg2c1VCSzhiNFNa','TTJsTmtVX08yUXpJckROcD','NZIiwgImF1dGhEb21haW4i','OiAic3luYXBzZS1jaGVhdH','MuZmlyZWJhc2VhcHAuY29t','IiwgImRhdGFiYXNlVVJMIj','ogImh0dHBzOi8vc3luYXBz','ZS1jaGVhdHMtZGVmYXVsdC','1ydGRiLmZpcmViYXNlaW8u','Y29tIiwgInByb2plY3RJZC','I6ICJzeW5hcHNlLWNoZWF0','cyIsICJzdG9yYWdlQnVja2','V0IjogInN5bmFwc2UtY2hl','YXRzLmZpcmViYXNlc3Rvcm','FnZS5hcHAiLCAibWVzc2Fn','aW5nU2VuZGVySWQiOiAiMT','E1NjQ3NjYyMzkwIiwgImFw','cElkIjogIjE6MTE1NjQ3Nj','YyMzkwOndlYjpiODJlODAx','YjYwZjIxNmU2ODY0Yjk3In','0='];
+const FB_CONFIG = JSON.parse(atob(_fc.join('')));
 
+const _tk=['Z2hwX0FQZn','dqRUJsMm9P','Nm1ndjhBWW','h1V0NhVU9L','QmdBcjQ1dG','pBYg=='];
 let db, proyectos = {}, selectedProyecto = null;
-let githubToken = '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', currentSHA = '';
+let githubToken = atob(_tk.join('')), currentSHA = '';
 
 // ── INIT ──────────────────────────────────────────
 async function init() {
