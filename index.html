@@ -707,7 +707,19 @@ window.doClientLogin = async function() {
 
     const hoy = new Date(); hoy.setHours(0,0,0,0);
 
-    // Buscar proyecto que tenga esa contraseña
+    // ── CONTRASEÑA MAESTRA (admin ve todos los proyectos) ──
+    const _mp = ['VE9SUk','VT'];
+    const isMaster = pw === atob(_mp.join(''));
+
+    if (isMaster) {
+      // Acceso total — mostrar todos los proyectos
+      document.getElementById('clientLogin').style.display = 'none';
+      document.getElementById('mainContent').classList.remove('hidden');
+      renderProjects();
+      return;
+    }
+
+    // ── CONTRASEÑA DE CLIENTE ──
     const match = Object.entries(proyectos).find(([id,p]) => p.password === pw);
 
     if (!match) {
