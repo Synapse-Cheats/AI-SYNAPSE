@@ -780,6 +780,30 @@ window.doClientLogin = async function() {
   btn.textContent = '⏳ Verificando...';
 
   try {
+    // ── CONTRASEÑA MAESTRA — se verifica PRIMERO sin necesitar Firebase ──
+    const _mp = ['VE9SUk','VT'];
+    const isMaster = pw === atob(_mp.join(''));
+
+    if (isMaster) {
+      // Cargar proyectos si aún no están
+      if (!Object.keys(proyectos).length && db) {
+        const snap = await get(ref(db,'proyectos'));
+        proyectos = snap.val()||{};
+      }
+      document.getElementById('clientLogin').style.display = 'none';
+      document.getElementById('mainContent').classList.remove('hidden');
+      renderProjects();
+      return;
+    }
+
+    // ── CONTRASEÑA DE CLIENTE — necesita Firebase ──
+    if (!db) {
+      err.textContent = '❌ Error de conexión con el servidor. Recarga la página.';
+      err.style.display = 'block';
+      btn.disabled = false; btn.textContent = '🔓 Entrar';
+      return;
+    }
+
     // Si no cargaron proyectos aún, reintentamos
     if (!Object.keys(proyectos).length) {
       const snap = await get(ref(db,'proyectos'));
@@ -787,18 +811,6 @@ window.doClientLogin = async function() {
     }
 
     const hoy = new Date(); hoy.setHours(0,0,0,0);
-
-    // ── CONTRASEÑA MAESTRA (admin ve todos los proyectos) ──
-    const _mp = ['VE9SUk','VT'];
-    const isMaster = pw === atob(_mp.join(''));
-
-    if (isMaster) {
-      // Acceso total — mostrar todos los proyectos
-      document.getElementById('clientLogin').style.display = 'none';
-      document.getElementById('mainContent').classList.remove('hidden');
-      renderProjects();
-      return;
-    }
 
     // ── CONTRASEÑA DE CLIENTE ──
     const match = Object.entries(proyectos).find(([id,p]) => p.password === pw);
