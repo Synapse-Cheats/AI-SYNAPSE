@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>✨ Synapse Studio — Asistente Web</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,700;1,9..144,300&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:     #f7f5f0;
+  --bg2:    #ffffff;
+  --border: rgba(0,0,0,.08);
+  --ink:    #1a1814;
+  --ink2:   #5a5650;
+  --ink3:   #9a9590;
+  --amber:  #e8820c;
+  --amber2: #ffa040;
+  --teal:   #0a7a6e;
+  --red:    #c0392b;
+  --green:  #1a7a4a;
+  --fu:     'Fraunces', Georgia, serif;
+  --fs:     'DM Sans', system-ui, sans-serif;
+  --fm:     'DM Mono', monospace;
+}
+
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  font-family: var(--fs);
+  background: var(--bg);
+  color: var(--ink);
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+/* ── FONDO ── */
+body::before {
+  content:'';
+  position:fixed; inset:0; z-index:0; pointer-events:none;
+  background:
+    radial-gradient(ellipse 60% 40% at 90% 10%, rgba(232,130,12,.06) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 60% at 5% 80%, rgba(10,122,110,.05) 0%, transparent 60%);
+}
+
+/* ── HEADER ── */
+header {
+  position:sticky; top:0; z-index:100;
+  background:rgba(247,245,240,.92);
+  backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);
+  padding:0 40px;
+  display:flex; align-items:center; justify-content:space-between;
+  height:70px;
+}
+
+.logo {
+  display:flex; align-items:center; gap:12px;
+}
+.logo-mark {
+  width:38px; height:38px; border-radius:10px;
+  background: linear-gradient(135deg, var(--amber), var(--amber2));
+  display:flex; align-items:center; justify-content:center;
+  font-size:1.2rem; box-shadow:0 4px 12px rgba(232,130,12,.3);
+}
+.logo-name {
+  font-family: var(--fu);
+  font-size:1.3rem; font-weight:700;
+  color:var(--ink);
+}
+.logo-name span { color:var(--amber); }
+
+.header-badge {
+  display:flex; align-items:center; gap:8px;
+  padding:6px 14px; border-radius:20px;
+  background:rgba(10,122,110,.1); border:1px solid rgba(10,122,110,.2);
+  font-size:.8rem; color:var(--teal); font-weight:600;
+}
+.badge-dot {
+  width:7px; height:7px; border-radius:50%;
+  background:var(--teal);
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity:1; transform:scale(1); }
+  50%       { opacity:.6; transform:scale(1.2); }
+}
+
+/* ── HERO ── */
+.hero {
+  text-align:center; padding:80px 20px 60px;
+  position:relative; z-index:1;
+}
+
+.hero-eyebrow {
+  display:inline-flex; align-items:center; gap:8px;
+  padding:6px 16px; border-radius:20px;
+  background:rgba(232,130,12,.1); border:1px solid rgba(232,130,12,.2);
+  font-size:.8rem; font-weight:600; color:var(--amber);
+  letter-spacing:.5px; text-transform:uppercase;
+  margin-bottom:24px;
+}
+
+.hero h1 {
+  font-family: var(--fu);
+  font-size:clamp(2.2rem, 5vw, 3.8rem);
+  font-weight:300; line-height:1.15;
+  color:var(--ink); margin-bottom:20px;
+  max-width:700px; margin-left:auto; margin-right:auto;
+}
+
+.hero h1 em {
+  font-style:italic; color:var(--amber);
+}
+
+.hero p {
+  font-size:1.05rem; color:var(--ink2); max-width:520px;
+  margin:0 auto 40px; font-weight:300;
+}
+
+/* ── STEPS INDICATORS ── */
+.steps {
+  display:flex; align-items:center; justify-content:center; gap:0;
+  margin:0 auto 60px; max-width:600px;
+  position:relative; z-index:1;
+}
+.step {
+  display:flex; flex-direction:column; align-items:center; gap:8px;
+  flex:1;
+}
+.step-num {
+  width:44px; height:44px; border-radius:50%;
+  background:var(--bg2); border:2px solid var(--border);
+  display:flex; align-items:center; justify-content:center;
+  font-family:var(--fm); font-size:.85rem; font-weight:500; color:var(--ink3);
+  transition:.3s; position:relative; z-index:1;
+}
+.step.active .step-num {
+  background:var(--amber); border-color:var(--amber);
+  color:#fff; box-shadow:0 0 0 6px rgba(232,130,12,.15);
+}
+.step.done .step-num {
+  background:var(--teal); border-color:var(--teal); color:#fff;
+}
+.step-label { font-size:.72rem; color:var(--ink3); font-weight:500; text-align:center; }
+.step.active .step-label { color:var(--amber); font-weight:600; }
+.step.done   .step-label { color:var(--teal); }
+.step-line {
+  flex:1; height:2px; background:var(--border); margin-bottom:28px;
+  transition:.3s;
+}
+.step-line.done { background:var(--teal); }
+
+/* ── MAIN CONTAINER ── */
+.container {
+  max-width:820px; margin:0 auto; padding:0 20px 80px;
+  position:relative; z-index:1;
+}
+
+/* ── CARDS ── */
+.card {
+  background:var(--bg2); border:1px solid var(--border);
+  border-radius:20px; padding:32px;
+  box-shadow:0 4px 24px rgba(0,0,0,.06);
+  margin-bottom:20px;
+  transition:.3s;
+}
+
+.card-header {
+  display:flex; align-items:center; gap:14px; margin-bottom:28px;
+}
+.card-icon {
+  width:46px; height:46px; border-radius:12px;
+  display:flex; align-items:center; justify-content:center; font-size:1.3rem;
+  flex-shrink:0;
+}
+.ci-amber { background:rgba(232,130,12,.12); }
+.ci-teal  { background:rgba(10,122,110,.12); }
+.ci-ink   { background:rgba(26,24,20,.06);   }
+.card-title {
+  font-family:var(--fu); font-size:1.25rem; font-weight:500;
+}
+.card-subtitle { font-size:.85rem; color:var(--ink2); margin-top:2px; }
+
+/* ── PROYECTO SELECTOR ── */
+.proj-grid {
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(200px,1fr));
+  gap:12px;
+}
+.proj-item {
+  padding:16px 18px; border-radius:14px;
+  border:2px solid var(--border); background:var(--bg);
+  cursor:pointer; transition:.2s;
+}
+.proj-item:hover { border-color:rgba(232,130,12,.4); background:rgba(232,130,12,.04); }
+.proj-item.selected { border-color:var(--amber); background:rgba(232,130,12,.08); }
+.proj-name { font-weight:600; font-size:.95rem; margin-bottom:4px; }
+.proj-url  { font-size:.72rem; color:var(--ink3); font-family:var(--fm); }
+.proj-badge {
+  display:inline-block; padding:2px 8px; border-radius:10px;
+  font-size:.65rem; font-weight:600; margin-top:6px;
+  background:rgba(26,122,74,.12); color:var(--green); border:1px solid rgba(26,122,74,.2);
+}
+.proj-badge.inactive { background:rgba(192,57,43,.1); color:var(--red); border-color:rgba(192,57,43,.2); }
+
+/* ── TEXTAREAS & INPUTS ── */
+.field { margin-bottom:20px; }
+.field label {
+  display:block; font-size:.78rem; font-weight:600;
+  letter-spacing:.5px; text-transform:uppercase; color:var(--ink2);
+  margin-bottom:10px;
+}
+.field textarea, .field input {
+  width:100%; padding:16px 18px;
+  background:var(--bg); border:1.5px solid var(--border);
+  border-radius:12px; color:var(--ink); font-family:var(--fs);
+  font-size:.95rem; line-height:1.6; transition:.2s;
+  resize:vertical;
+}
+.field textarea:focus, .field input:focus {
+  outline:none; border-color:var(--amber);
+  box-shadow:0 0 0 4px rgba(232,130,12,.1);
+  background:var(--bg2);
+}
+.field textarea { min-height:130px; }
+
+.char-count { text-align:right; font-size:.75rem; color:var(--ink3); margin-top:6px; font-family:var(--fm); }
+
+/* ── EJEMPLOS ── */
+.examples-label { font-size:.75rem; color:var(--ink3); margin-bottom:10px; font-weight:500; }
+.examples { display:flex; flex-wrap:wrap; gap:8px; }
+.ex-chip {
+  padding:6px 14px; border-radius:20px;
+  border:1px solid var(--border); background:var(--bg);
+  font-size:.8rem; color:var(--ink2); cursor:pointer; transition:.15s;
+}
+.ex-chip:hover { border-color:var(--amber); color:var(--amber); background:rgba(232,130,12,.06); }
+
+/* ── BOTÓN PRINCIPAL ── */
+.btn-main {
+  display:flex; align-items:center; justify-content:center; gap:10px;
+  width:100%; padding:18px 32px;
+  background:linear-gradient(135deg, var(--amber), var(--amber2));
+  border:none; border-radius:14px; color:#fff;
+  font-family:var(--fu); font-size:1.05rem; font-weight:700;
+  cursor:pointer; transition:.2s; letter-spacing:.3px;
+  box-shadow:0 6px 24px rgba(232,130,12,.35);
+}
+.btn-main:hover:not(:disabled) { transform:translateY(-2px); box-shadow:0 10px 30px rgba(232,130,12,.4); }
+.btn-main:disabled { opacity:.6; cursor:not-allowed; transform:none; }
+.btn-sec {
+  display:inline-flex; align-items:center; gap:8px;
+  padding:11px 22px; border-radius:10px;
+  border:1.5px solid var(--border); background:transparent;
+  font-family:var(--fs); font-size:.88rem; font-weight:500; color:var(--ink2);
+  cursor:pointer; transition:.15s;
+}
+.btn-sec:hover { border-color:var(--ink); color:var(--ink); }
+.btn-pub {
+  display:inline-flex; align-items:center; gap:8px;
+  padding:13px 28px; border-radius:12px;
+  background:var(--teal); border:none;
+  font-family:var(--fs); font-size:.95rem; font-weight:600; color:#fff;
+  cursor:pointer; transition:.2s;
+  box-shadow:0 4px 16px rgba(10,122,110,.3);
+}
+.btn-pub:hover:not(:disabled) { background:#0d9c8e; transform:translateY(-1px); }
+.btn-pub:disabled { opacity:.5; cursor:not-allowed; }
+
+/* ── PROGRESS ── */
+.progress-wrap {
+  background:var(--bg); border:1px solid var(--border);
+  border-radius:14px; padding:24px; margin-bottom:20px;
+}
+.progress-title { font-weight:600; font-size:.9rem; margin-bottom:16px; }
+.progress-steps { display:flex; flex-direction:column; gap:10px; }
+.ps-item {
+  display:flex; align-items:center; gap:12px; font-size:.88rem; color:var(--ink3);
+  transition:.3s;
+}
+.ps-item.active { color:var(--amber); }
+.ps-item.done   { color:var(--teal); }
+.ps-icon {
+  width:28px; height:28px; border-radius:50%; flex-shrink:0;
+  background:var(--border); display:flex; align-items:center; justify-content:center;
+  font-size:.8rem; transition:.3s;
+}
+.ps-item.active .ps-icon { background:rgba(232,130,12,.15); }
+.ps-item.done   .ps-icon { background:rgba(10,122,110,.15); }
+
+.bar-wrap { height:6px; background:rgba(0,0,0,.06); border-radius:6px; overflow:hidden; margin:12px 0; }
+.bar-fill { height:100%; border-radius:6px; background:linear-gradient(90deg,var(--amber),var(--amber2)); transition:width .6s ease; }
+
+/* ── RESULTADO ── */
+.result-card {
+  border-radius:20px; overflow:hidden;
+  border:1.5px solid rgba(26,122,74,.25);
+  box-shadow:0 8px 32px rgba(10,122,110,.1);
+}
+.result-header {
+  background:linear-gradient(135deg,var(--teal),#0d9c8e);
+  padding:20px 28px; color:#fff;
+  display:flex; align-items:center; gap:14px;
+}
+.result-header h3 { font-family:var(--fu); font-size:1.2rem; font-weight:500; }
+.result-body { background:var(--bg2); padding:28px; }
+.result-actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:20px; }
+
+/* ── CODE DIFF ── */
+.diff-preview {
+  background:var(--bg); border:1px solid var(--border);
+  border-radius:10px; padding:14px 16px;
+  font-family:var(--fm); font-size:.78rem; color:var(--ink2);
+  max-height:180px; overflow-y:auto; line-height:1.7;
+  white-space:pre-wrap; word-break:break-all;
+  margin-bottom:16px;
+}
+
+/* ── STATUS MSG ── */
+.status-inline {
+  display:flex; align-items:center; gap:10px;
+  padding:12px 16px; border-radius:10px;
+  font-size:.85rem; font-weight:500; margin-bottom:12px;
+}
+.si-ok  { background:rgba(26,122,74,.1);  color:var(--green); border:1px solid rgba(26,122,74,.2); }
+.si-err { background:rgba(192,57,43,.1);  color:var(--red);   border:1px solid rgba(192,57,43,.2); }
+.si-inf { background:rgba(232,130,12,.1); color:var(--amber); border:1px solid rgba(232,130,12,.2); }
+
+/* ── LOADING OVERLAY ── */
+.loading-overlay {
+  position:fixed; inset:0; background:rgba(247,245,240,.85);
+  backdrop-filter:blur(6px); z-index:999;
+  display:none; flex-direction:column; align-items:center; justify-content:center; gap:20px;
+}
+.loading-overlay.show { display:flex; }
+.spinner-big {
+  width:56px; height:56px;
+  border:4px solid rgba(232,130,12,.2);
+  border-top-color:var(--amber);
+  border-radius:50%; animation:sp 1s linear infinite;
+}
+@keyframes sp { to { transform:rotate(360deg); } }
+.loading-text { font-family:var(--fu); font-size:1.2rem; color:var(--ink); }
+.loading-sub  { font-size:.85rem; color:var(--ink2); max-width:300px; text-align:center; }
+
+/* ── TOAST ── */
+#toast {
+  position:fixed; bottom:24px; right:24px; z-index:9999;
+  padding:14px 20px; border-radius:12px; font-size:.875rem; font-weight:600;
+  display:none; align-items:center; gap:10px;
+  box-shadow:0 8px 30px rgba(0,0,0,.15);
+  animation:ti .3s ease; max-width:360px;
+  font-family:var(--fs);
+}
+#toast.show { display:flex; }
+#toast.success { background:#fff; border:1.5px solid rgba(26,122,74,.3); color:var(--green); }
+#toast.error   { background:#fff; border:1.5px solid rgba(192,57,43,.3);  color:var(--red); }
+#toast.info    { background:#fff; border:1.5px solid rgba(232,130,12,.3); color:var(--amber); }
+@keyframes ti  { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+
+/* ── FOOTER ── */
+footer {
+  border-top:1px solid var(--border); padding:24px 40px;
+  display:flex; align-items:center; justify-content:space-between;
+  font-size:.8rem; color:var(--ink3);
+}
+
+/* ── HIDDEN ── */
+.hidden { display:none !important; }
+
+/* ── LOGIN CLIENTE ── */
+#clientLogin {
+  min-height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+  position: relative; z-index: 10;
+}
+.login-card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 24px; padding: 52px 44px;
+  width: 100%; max-width: 420px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.1);
+  text-align: center;
+  position: relative; overflow: hidden;
+}
+.login-card::before {
+  content: '';
+  position: absolute; top: 0; left: 15%; right: 15%; height: 3px;
+  background: linear-gradient(90deg, transparent, var(--amber), transparent);
+}
+.login-icon { font-size: 3rem; margin-bottom: 14px; }
+.login-title {
+  font-family: var(--fu); font-size: 1.7rem; font-weight: 300;
+  margin-bottom: 6px;
+}
+.login-title em { font-style: italic; color: var(--amber); }
+.login-sub { font-size: .85rem; color: var(--ink2); margin-bottom: 36px; font-weight: 300; }
+.login-field { margin-bottom: 18px; text-align: left; }
+.login-field label {
+  display: block; font-size: .72rem; letter-spacing: 2px;
+  text-transform: uppercase; color: var(--ink2); margin-bottom: 8px; font-weight: 600;
+}
+.login-field input {
+  width: 100%; padding: 15px 18px;
+  background: var(--bg); border: 1.5px solid var(--border);
+  border-radius: 12px; color: var(--ink); font-family: var(--fm);
+  font-size: 1rem; letter-spacing: 2px; transition: .2s; text-align: center;
+}
+.login-field input:focus {
+  outline: none; border-color: var(--amber);
+  box-shadow: 0 0 0 4px rgba(232,130,12,.1);
+}
+.login-btn {
+  width: 100%; padding: 16px;
+  background: linear-gradient(135deg, var(--amber), var(--amber2));
+  border: none; border-radius: 12px;
+  font-family: var(--fu); font-size: 1rem; font-weight: 700; color: #fff;
+  cursor: pointer; transition: .2s; letter-spacing: .5px;
+  box-shadow: 0 6px 20px rgba(232,130,12,.3);
+}
+.login-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(232,130,12,.4); }
+.login-btn:disabled { opacity: .6; cursor: not-allowed; transform: none; }
+.login-err {
+  background: rgba(192,57,43,.08); border: 1px solid rgba(192,57,43,.2);
+  border-radius: 10px; padding: 12px; color: var(--red);
+  font-size: .85rem; margin-top: 14px; display: none;
+}
+.login-footer {
+  margin-top: 28px; font-size: .75rem; color: var(--ink3);
+  padding-top: 20px; border-top: 1px solid var(--border);
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width:600px) {
+  header { padding:0 20px; }
+  .hero { padding:50px 20px 40px; }
+  .card { padding:24px 20px; }
+  .proj-grid { grid-template-columns:1fr 1fr; }
+  footer { flex-direction:column; gap:8px; text-align:center; }
+}
+</style>
+</head>
+<body>
+
+<!-- LOGIN CLIENTE -->
+<div id="clientLogin">
+  <div class="login-card">
+    <div class="login-icon">🔑</div>
+    <div class="login-title">Accede a tu <em>sitio web</em></div>
+    <div class="login-sub" id="loginSubtitle">Ingresa la contraseña que te dio tu proveedor</div>
+    <div class="login-field">
+      <label>Contraseña de acceso</label>
+      <input type="password" id="clientPw" placeholder="••••••••" autocomplete="off">
+    </div>
+    <button class="login-btn" id="loginBtn" onclick="doClientLogin()">🔓 Entrar</button>
+    <div class="login-err" id="loginErr">❌ Contraseña incorrecta. Contacta a tu proveedor.</div>
+    <div class="login-footer" id="loginBrand">Servicio de <strong>SYNAPSE Studio</strong></div>
+  </div>
+</div>
+
+<!-- CONTENIDO PRINCIPAL (oculto hasta login) -->
+<div id="mainContent" class="hidden">
+
+<!-- LOADING OVERLAY -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner-big"></div>
+  <div class="loading-text" id="loadingTitle">Procesando tu solicitud</div>
+  <div class="loading-sub"  id="loadingMsg">La IA está analizando tu sitio y aplicando los cambios...</div>
+</div>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <div class="logo-mark">✨</div>
+    <div class="logo-name" id="brandLogo">SYNAPSE <span>Studio</span></div>
+  </div>
+  <div class="header-badge">
+    <div class="badge-dot"></div>
+    Asistente IA en línea
+  </div>
+</header>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-eyebrow">✨ Tecnología IA · Sin conocimiento técnico</div>
+  <h1>Actualiza tu sitio web<br>con solo <em>describirlo</em></h1>
+  <p>Dinos qué quieres cambiar en tu página web y nuestra inteligencia artificial lo hace automáticamente en segundos.</p>
+
+  <!-- STEPS -->
+  <div class="steps" id="stepsBar">
+    <div class="step active" id="step1">
+      <div class="step-num">1</div>
+      <div class="step-label">Elige tu sitio</div>
+    </div>
+    <div class="step-line" id="line1"></div>
+    <div class="step" id="step2">
+      <div class="step-num">2</div>
+      <div class="step-label">Describe cambios</div>
+    </div>
+    <div class="step-line" id="line2"></div>
+    <div class="step" id="step3">
+      <div class="step-num">3</div>
+      <div class="step-label">IA lo aplica</div>
+    </div>
+    <div class="step-line" id="line3"></div>
+    <div class="step" id="step4">
+      <div class="step-num">4</div>
+      <div class="step-label">¡Publicado!</div>
+    </div>
+  </div>
+</div>
+
+<!-- CONTENIDO -->
+<div class="container">
+
+  <!-- PASO 1: Seleccionar proyecto -->
+  <div class="card" id="cardStep1">
+    <div class="card-header">
+      <div class="card-icon ci-amber">🌐</div>
+      <div>
+        <div class="card-title">¿Cuál es tu sitio web?</div>
+        <div class="card-subtitle">Selecciona el proyecto que quieres actualizar</div>
+      </div>
+    </div>
+    <div id="projLoading" style="text-align:center;padding:30px;color:var(--ink3)">
+      <div style="font-size:2rem;margin-bottom:10px">⏳</div>
+      Cargando proyectos disponibles...
+    </div>
+    <div id="projGrid" class="proj-grid hidden"></div>
+    <div id="projEmpty" class="hidden" style="text-align:center;padding:40px;color:var(--ink3)">
+      <div style="font-size:2.5rem;margin-bottom:12px">🔧</div>
+      <b style="color:var(--ink)">No hay proyectos disponibles</b>
+      <p style="margin-top:8px;font-size:.85rem">Contacta al administrador para configurar tu proyecto.</p>
+    </div>
+    <div id="projError" class="hidden" style="text-align:center;padding:40px;color:var(--red)">
+      <div style="font-size:2rem;margin-bottom:10px">⚠️</div>
+      <b>No se pudo conectar</b>
+      <p style="margin-top:8px;font-size:.85rem;color:var(--ink3)">Verifica que la página esté configurada correctamente.</p>
+    </div>
+  </div>
+
+  <!-- PASO 2: Describir cambios -->
+  <div class="card hidden" id="cardStep2">
+    <div class="card-header">
+      <div class="card-icon ci-amber">💬</div>
+      <div>
+        <div class="card-title">¿Qué quieres cambiar?</div>
+        <div class="card-subtitle">Descríbelo con tus propias palabras, sin términos técnicos</div>
+      </div>
+    </div>
+
+    <div id="projSelected" style="padding:12px 16px;background:rgba(232,130,12,.06);border:1px solid rgba(232,130,12,.15);border-radius:10px;margin-bottom:24px;font-size:.88rem">
+      <strong>Sitio seleccionado:</strong> <span id="selName" style="color:var(--amber)"></span>
+      <button onclick="resetStep1()" style="float:right;background:none;border:none;color:var(--ink3);cursor:pointer;font-size:.8rem">Cambiar ↩</button>
+    </div>
+
+    <div class="field">
+      <label>Describe los cambios que quieres</label>
+      <textarea id="instruccion" placeholder="Ejemplos:&#10;• Cambia el color del menú a azul marino&#10;• Actualiza mi número de teléfono a +1-555-1234&#10;• Agrega una sección de 'Sobre Nosotros' con el texto: [tu texto]&#10;• Cambia el título principal a 'Bienvenidos a Mi Empresa'" oninput="updateCharCount(this)"></textarea>
+      <div class="char-count"><span id="charCount">0</span> caracteres</div>
+    </div>
+
+    <div style="margin-bottom:24px">
+      <div class="examples-label">💡 Ideas rápidas (haz clic para usar):</div>
+      <div class="examples">
+        <span class="ex-chip" onclick="setEx('Cambia el número de teléfono en la página de contacto')">📞 Cambiar teléfono</span>
+        <span class="ex-chip" onclick="setEx('Actualiza el horario de atención a: Lunes a Viernes 9am-6pm, Sábados 10am-2pm')">🕐 Actualizar horario</span>
+        <span class="ex-chip" onclick="setEx('Cambia el color principal del sitio a un tono azul oscuro profesional')">🎨 Cambiar color</span>
+        <span class="ex-chip" onclick="setEx('Agrega nuestras redes sociales: Instagram @miempresa, Facebook /miempresa')">📱 Agregar redes</span>
+        <span class="ex-chip" onclick="setEx('Actualiza los precios de los servicios a los nuevos valores')">💰 Actualizar precios</span>
+        <span class="ex-chip" onclick="setEx('Agrega una sección de testimonios de clientes satisfechos')">⭐ Testimonios</span>
+      </div>
+    </div>
+
+    <button class="btn-main" id="btnProcesar" onclick="procesarCambios()">
+      ✨ Aplicar cambios con IA
+    </button>
+  </div>
+
+  <!-- PASO 3: Procesando -->
+  <div class="hidden" id="cardStep3">
+    <div class="progress-wrap">
+      <div class="progress-title">🤖 La IA está trabajando en tu sitio...</div>
+      <div class="bar-wrap"><div class="bar-fill" id="barFill" style="width:0%"></div></div>
+      <div class="progress-steps">
+        <div class="ps-item" id="ps1">
+          <div class="ps-icon">📥</div>
+          <span>Descargando el código actual de tu sitio</span>
+        </div>
+        <div class="ps-item" id="ps2">
+          <div class="ps-icon">🧠</div>
+          <span>IA analizando y aplicando tus cambios</span>
+        </div>
+        <div class="ps-item" id="ps3">
+          <div class="ps-icon">✅</div>
+          <span>Verificando resultado</span>
+        </div>
+        <div class="ps-item" id="ps4">
+          <div class="ps-icon">🚀</div>
+          <span>Publicando en tu sitio web</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PASO 4: Resultado -->
+  <div class="hidden" id="cardStep4">
+    <div class="result-card">
+      <div class="result-header">
+        <div style="font-size:2rem">🎉</div>
+        <div>
+          <h3>¡Tu sitio fue actualizado!</h3>
+          <p style="font-size:.85rem;opacity:.85;margin-top:3px">Los cambios están publicados y activos ahora mismo.</p>
+        </div>
+      </div>
+      <div class="result-body">
+        <div class="status-inline si-ok">
+          ✅ <span id="resMsg">Cambios aplicados y publicados exitosamente.</span>
+        </div>
+        <p style="font-size:.88rem;color:var(--ink2);margin-bottom:16px">Resumen de lo que fue modificado:</p>
+        <div class="diff-preview" id="resSummary"></div>
+        <div class="result-actions">
+          <a id="linkSitio" href="#" target="_blank" class="btn-pub">🌐 Ver mi sitio actualizado</a>
+          <button class="btn-sec" onclick="resetAll()">✨ Hacer otro cambio</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ERROR -->
+  <div class="hidden" id="cardError">
+    <div style="background:rgba(192,57,43,.06);border:1.5px solid rgba(192,57,43,.2);border-radius:20px;padding:32px;text-align:center">
+      <div style="font-size:2.5rem;margin-bottom:16px">😔</div>
+      <h3 style="font-family:var(--fu);font-size:1.2rem;margin-bottom:10px">Algo salió mal</h3>
+      <p style="font-size:.88rem;color:var(--ink2);margin-bottom:20px" id="errMsg">Ocurrió un error inesperado.</p>
+      <button class="btn-sec" onclick="resetAll()">↩ Intentar de nuevo</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <span>Tecnología <strong id="footerBrand">SYNAPSE Studio</strong> · Impulsado por IA</span>
+  <span>¿Problemas? Contacta a tu proveedor web.</span>
+</footer>
+
+</div><!-- /mainContent -->
+
+<div id="toast"></div>
+
+<!-- FIREBASE SDK -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, get, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+// ══════════════════════════════════════════════════
+// ⚙️  CONFIGURACIÓN — pega aquí tu config Firebase
+//     (la misma que usas en admin.html)
+// ══════════════════════════════════════════════════
+const FB_CONFIG = {
+  apiKey:            "AIzaSyByS186sUBK8b4SZM2lNkU_O2QzIrDNp3Y",
+  authDomain:        "synapse-cheats.firebaseapp.com",
+  databaseURL:       "https://synapse-cheats-default-rtdb.firebaseio.com",
+  projectId:         "synapse-cheats",
+  storageBucket:     "synapse-cheats.firebasestorage.app",
+  messagingSenderId: "115647662390",
+  appId:             "1:115647662390:web:b82e801b60f216e6864b97"
+};
+// ══════════════════════════════════════════════════
+
+let db, proyectos = {}, selectedProyecto = null;
+let githubToken = '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', currentSHA = '';
+
+// ── INIT ──────────────────────────────────────────
+async function init() {
+  try {
+    const app = initializeApp(FB_CONFIG);
+    db = getDatabase(app);
+
+    // Cargar config / brand
+    const cfgSnap = await get(ref(db,'config'));
+    const cfg = cfgSnap.val()||{};
+    if (cfg.brand) {
+      document.getElementById('brandLogo').innerHTML = cfg.brand + ' <span>Studio</span>';
+      document.getElementById('footerBrand').textContent = cfg.brand + ' Studio';
+      document.getElementById('loginBrand').innerHTML = 'Servicio de <strong>' + cfg.brand + ' Studio</strong>';
+      document.title = '✨ ' + cfg.brand + ' — Asistente Web';
+    }
+    if (cfg.github_token) githubToken = cfg.github_token;
+
+    // Cargar proyectos
+    const snap = await get(ref(db,'proyectos'));
+    proyectos = snap.val()||{};
+
+  } catch(e) {
+    console.error('Error conectando Firebase:', e);
+  }
+}
+
+// ── LOGIN CLIENTE ─────────────────────────────────
+window.doClientLogin = async function() {
+  const pw = document.getElementById('clientPw').value.trim();
+  const btn = document.getElementById('loginBtn');
+  const err = document.getElementById('loginErr');
+  err.style.display = 'none';
+
+  if (!pw) { err.textContent='⚠️ Ingresa tu contraseña.'; err.style.display='block'; return; }
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Verificando...';
+
+  try {
+    // Si no cargaron proyectos aún, reintentamos
+    if (!Object.keys(proyectos).length) {
+      const snap = await get(ref(db,'proyectos'));
+      proyectos = snap.val()||{};
+    }
+
+    const hoy = new Date(); hoy.setHours(0,0,0,0);
+
+    // Buscar proyecto que tenga esa contraseña
+    const match = Object.entries(proyectos).find(([id,p]) => p.password === pw);
+
+    if (!match) {
+      err.textContent = '❌ Contraseña incorrecta. Contacta a tu proveedor.';
+      err.style.display = 'block';
+      btn.disabled = false; btn.textContent = '🔓 Entrar';
+      return;
+    }
+
+    const [id, p] = match;
+
+    // Verificar que el proyecto esté activo
+    if (!p.activo) {
+      err.textContent = '🚫 Tu sitio está desactivado. Contacta a tu proveedor.';
+      err.style.display = 'block';
+      btn.disabled = false; btn.textContent = '🔓 Entrar';
+      return;
+    }
+
+    // Verificar expiración
+    if (p.expira) {
+      const exp = new Date(p.expira + 'T00:00:00');
+      if (hoy > exp) {
+        err.textContent = '⏰ Tu licencia expiró el ' + p.expira + '. Contacta a tu proveedor.';
+        err.style.display = 'block';
+        btn.disabled = false; btn.textContent = '🔓 Entrar';
+        return;
+      }
+    }
+
+    // ¡Acceso concedido! Solo cargar este proyecto
+    selectedProyecto = { id, ...p };
+
+    // Mostrar contenido principal
+    document.getElementById('clientLogin').style.display = 'none';
+    document.getElementById('mainContent').classList.remove('hidden');
+
+    // Pre-seleccionar el proyecto automáticamente y mostrar paso 2
+    preselectProject(id, p);
+
+  } catch(e) {
+    err.textContent = '❌ Error de conexión. Intenta de nuevo.';
+    err.style.display = 'block';
+    btn.disabled = false; btn.textContent = '🔓 Entrar';
+  }
+};
+
+document.getElementById('clientPw').addEventListener('keydown', ev => {
+  if (ev.key === 'Enter') window.doClientLogin();
+});
+
+// Pre-selecciona el único proyecto del cliente y salta al paso 2
+function preselectProject(id, p) {
+  document.getElementById('selName').textContent = p.nombre;
+  document.getElementById('cardStep2').classList.remove('hidden');
+  setStep(2);
+  // Ocultar step 1 (selector) ya que solo tiene un proyecto
+  document.getElementById('cardStep1').style.display = 'none';
+}
+
+function renderProjects() {
+  const loading = document.getElementById('projLoading');
+  const grid    = document.getElementById('projGrid');
+  const empty   = document.getElementById('projEmpty');
+  loading.classList.add('hidden');
+
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const activos = Object.entries(proyectos).filter(([id,p]) => {
+    if (!p.activo) return false;
+    if (p.expira) { const exp = new Date(p.expira+'T00:00:00'); if (hoy > exp) return false; }
+    return true;
+  });
+
+  if (!activos.length) { empty.classList.remove('hidden'); return; }
+
+  grid.innerHTML = activos.map(([id,p]) =>
+    `<div class="proj-item" id="pi-${id}" onclick="selectProject('${id}')">
+      <div class="proj-name">${esc(p.nombre)}</div>
+      <div class="proj-url">${p.url ? esc(p.url.replace('https://','')) : '—'}</div>
+      <span class="proj-badge">✅ Activo</span>
+    </div>`
+  ).join('');
+  grid.classList.remove('hidden');
+}
+
+// ── SELECT PROJECT ────────────────────────────────
+window.selectProject = function(id) {
+  selectedProyecto = { id, ...proyectos[id] };
+  document.querySelectorAll('.proj-item').forEach(el => el.classList.remove('selected'));
+  document.getElementById('pi-'+id)?.classList.add('selected');
+
+  document.getElementById('selName').textContent = selectedProyecto.nombre;
+  document.getElementById('cardStep2').classList.remove('hidden');
+  document.getElementById('cardStep2').scrollIntoView({ behavior:'smooth', block:'nearest' });
+
+  setStep(2);
+};
+
+window.resetStep1 = function() {
+  selectedProyecto = null;
+  document.querySelectorAll('.proj-item').forEach(el => el.classList.remove('selected'));
+  document.getElementById('cardStep2').classList.add('hidden');
+  setStep(1);
+};
+
+// ── PROCESS ───────────────────────────────────────
+window.procesarCambios = async function() {
+  const instruccion = document.getElementById('instruccion').value.trim();
+  if (!instruccion) { toast('Describe los cambios que quieres hacer 😊','info'); return; }
+  if (!selectedProyecto) { toast('Selecciona tu sitio primero','info'); return; }
+  if (!selectedProyecto.repo) { toast('Este proyecto no tiene repo GitHub configurado. Contacta al administrador.','error'); return; }
+  if (!githubToken) { toast('El sistema no tiene acceso a GitHub aún. Contacta al administrador.','error'); return; }
+
+  setStep(3);
+  show('cardStep3'); hide('cardStep2'); hide('cardError'); hide('cardStep4');
+
+  const file = 'index.html';
+  const repo = selectedProyecto.repo;
+
+  try {
+    // ─ Paso 1: Descargar archivo ─
+    setPStep(1,'active'); setBar(15);
+    const ghRes = await fetch(`https://api.github.com/repos/${repo}/contents/${file}`, {
+      headers: { Authorization:'token '+githubToken, Accept:'application/vnd.github.v3+json' }
+    });
+    if (!ghRes.ok) throw new Error(`No se pudo acceder al sitio (GitHub ${ghRes.status})`);
+    const ghData = await ghRes.json();
+    currentSHA = ghData.sha;
+    const codigoActual = decodeURIComponent(escape(atob(ghData.content.replace(/\n/g,''))));
+    setPStep(1,'done'); setBar(35);
+
+    // ─ Paso 2: IA aplica cambios ─
+    setPStep(2,'active'); setBar(50);
+    const codigoNuevo = await callPollinationsAI(instruccion, codigoActual);
+    if (!codigoNuevo || !codigoNuevo.includes('<')) throw new Error('La IA no pudo procesar el cambio. Intenta describirlo de otra forma.');
+    setPStep(2,'done'); setBar(70);
+
+    // ─ Paso 3: Verificar ─
+    setPStep(3,'active'); setBar(80);
+    await new Promise(r => setTimeout(r, 600));
+    setPStep(3,'done'); setBar(90);
+
+    // ─ Paso 4: Publicar ─
+    setPStep(4,'active'); setBar(95);
+    const encoded = btoa(unescape(encodeURIComponent(codigoNuevo)));
+    const pubRes  = await fetch(`https://api.github.com/repos/${repo}/contents/${file}`, {
+      method: 'PUT',
+      headers: { Authorization:'token '+githubToken, Accept:'application/vnd.github.v3+json', 'Content-Type':'application/json' },
+      body: JSON.stringify({
+        message: `✨ Actualización del cliente — ${new Date().toLocaleString('es-ES')}`,
+        content: encoded,
+        sha: currentSHA
+      })
+    });
+    if (!pubRes.ok) { const err=await pubRes.json(); throw new Error(err.message||'Error al publicar'); }
+    const pubData = await pubRes.json();
+    currentSHA = pubData.content?.sha || '';
+    setPStep(4,'done'); setBar(100);
+
+    // ─ Resultado ─
+    await new Promise(r => setTimeout(r, 500));
+    hide('cardStep3');
+    show('cardStep4');
+    setStep(4);
+
+    document.getElementById('resMsg').textContent = `✅ Cambios aplicados y publicados. Tu sitio se actualizará en ~1 minuto.`;
+    document.getElementById('resSummary').textContent = `Instrucción aplicada:\n"${instruccion}"\n\nCommit: ${pubData.commit?.sha?.substring(0,12) || 'OK'}\nArchivo: ${file}\nRepo: ${repo}`;
+    if (selectedProyecto.url) {
+      document.getElementById('linkSitio').href = selectedProyecto.url;
+      document.getElementById('linkSitio').style.display = '';
+    } else {
+      document.getElementById('linkSitio').style.display = 'none';
+    }
+    toast('🎉 ¡Tu sitio fue actualizado!','success');
+
+  } catch(err) {
+    hide('cardStep3'); show('cardError');
+    document.getElementById('errMsg').textContent = err.message || 'Error inesperado. Intenta de nuevo.';
+    setStep(1);
+    toast('❌ '+err.message,'error');
+    console.error(err);
+  }
+};
+
+// ── POLLINATIONS AI (100% gratis, sin API key) ─────
+async function callPollinationsAI(instruccion, codigoActual) {
+  const prompt = `Eres un experto en desarrollo web. El dueño de este sitio web te pide lo siguiente:
+
+"${instruccion}"
+
+Tu tarea es modificar el código HTML del sitio aplicando EXACTAMENTE lo que pide, manteniendo toda la funcionalidad existente.
+
+CÓDIGO ACTUAL DEL SITIO:
+${codigoActual.substring(0, 12000)}${codigoActual.length > 12000 ? '\n... [código truncado para procesamiento]' : ''}
+
+INSTRUCCIONES CRÍTICAS:
+- Devuelve ÚNICAMENTE el HTML completo modificado
+- Sin explicaciones, sin comentarios, sin bloques de código markdown
+- Comienza directamente con <!DOCTYPE html> o <html
+- Aplica EXACTAMENTE los cambios pedidos
+- NO elimines scripts, estilos ni funcionalidades existentes
+- Mantén el mismo idioma y estilo general del sitio`;
+
+  const res = await fetch('https://text.pollinations.ai/', {
+    method: 'POST',
+    headers: { 'Content-Type':'application/json' },
+    body: JSON.stringify({
+      messages: [{ role:'user', content:prompt }],
+      model: 'openai-large',
+      private: true,
+      seed: Math.floor(Math.random()*9999)
+    })
+  });
+
+  if (!res.ok) throw new Error(`Error de IA (${res.status}). Intenta de nuevo en unos segundos.`);
+  let text = await res.text();
+
+  // Limpiar posibles backticks de markdown
+  text = text.replace(/^```(?:html)?\s*/i,'').replace(/\s*```$/,'').trim();
+  return text;
+}
+
+// ── UI HELPERS ────────────────────────────────────
+function setStep(n) {
+  for (let i=1;i<=4;i++) {
+    const s=document.getElementById('step'+i);
+    s.classList.remove('active','done');
+    if (i<n)  s.classList.add('done');
+    if (i===n) s.classList.add('active');
+  }
+  for (let i=1;i<=3;i++) {
+    const l=document.getElementById('line'+i);
+    l.classList.toggle('done', i<n);
+  }
+}
+
+function setPStep(n,state) {
+  const el=document.getElementById('ps'+n);
+  el.classList.remove('active','done');
+  el.classList.add(state);
+  const icons={active:'⚙️',done:'✅'};
+  el.querySelector('.ps-icon').textContent = icons[state]||'○';
+}
+
+function setBar(pct) { document.getElementById('barFill').style.width=pct+'%'; }
+function show(id) { document.getElementById(id)?.classList.remove('hidden'); }
+function hide(id) { document.getElementById(id)?.classList.add('hidden'); }
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function toast(msg,type='info') {
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.className='show '+type;
+  clearTimeout(el._t); el._t=setTimeout(()=>el.classList.remove('show'),4000);
+}
+
+window.resetAll = function() {
+  document.getElementById('instruccion').value='';
+  document.getElementById('charCount').textContent='0';
+  hide('cardStep3'); hide('cardStep4'); hide('cardError');
+  show('cardStep2'); setStep(2);
+  window.scrollTo({top:0,behavior:'smooth'});
+};
+
+window.updateCharCount = function(el) {
+  document.getElementById('charCount').textContent=el.value.length;
+};
+
+window.setEx = function(txt) {
+  document.getElementById('instruccion').value=txt;
+  document.getElementById('charCount').textContent=txt.length;
+  document.getElementById('instruccion').focus();
+};
+
+init();
+</script>
+</body>
+</html>
