@@ -772,45 +772,45 @@ window.doClientLogin = async function() {
   const pw = document.getElementById('clientPw').value.trim();
   const btn = document.getElementById('loginBtn');
   const err = document.getElementById('loginErr');
-  err.style.display = 'none';
 
-  if (!pw) { err.textContent='⚠️ Ingresa tu contraseña.'; err.style.display='block'; return; }
+  err.style.display = 'none';
+  if (!pw) {
+    err.textContent = '⚠️ Ingresa tu contraseña.';
+    err.style.display = 'block';
+    return;
+  }
 
   btn.disabled = true;
   btn.textContent = '⏳ Verificando...';
 
-  try {
-    // ── CONTRASEÑA MAESTRA — siempre primero, sin Firebase ──
-    if (pw === atob(['VE9S','UkVT'].join(''))) {
-      // Forzar carga de proyectos desde Firebase
-      try {
-        const snap = await get(ref(db,'proyectos'));
-        proyectos = snap.val()||{};
-      } catch(e) {}
-      document.getElementById('clientLogin').style.display = 'none';
-      document.getElementById('mainContent').classList.remove('hidden');
-      renderProjects();
-      btn.disabled = false; btn.textContent = '🔓 Entrar';
-      return;
-    }
+  // ══ CONTRASEÑA MAESTRA ════════════════════════════════
+  const master = atob('VE9SUkVT'); // TORRES
+  if (pw === master) {
+    try {
+      if (db) {
+        const snap = await get(ref(db, 'proyectos'));
+        proyectos = snap.val() || {};
+      }
+    } catch(e) {}
+    document.getElementById('clientLogin').style.display = 'none';
+    document.getElementById('mainContent').classList.remove('hidden');
+    btn.disabled = false;
+    btn.textContent = '🔓 Entrar';
+    renderProjects();
+    return;
+  }
 
-    // ── CONTRASEÑA DE CLIENTE ──
-    if (!db) {
-      err.textContent = '❌ Sin conexión. Recarga la página.';
-      err.style.display = 'block';
-      btn.disabled = false; btn.textContent = '🔓 Entrar';
-      return;
-    }
+  // ══ CONTRASEÑA DE CLIENTE ═════════════════════════════
+  try {
+    if (!db) throw new Error('sin-db');
 
     if (!Object.keys(proyectos).length) {
-      const snap = await get(ref(db,'proyectos'));
-      proyectos = snap.val()||{};
+      const snap = await get(ref(db, 'proyectos'));
+      proyectos = snap.val() || {};
     }
 
     const hoy = new Date(); hoy.setHours(0,0,0,0);
-
-    // ── CONTRASEÑA DE CLIENTE ──
-    const match = Object.entries(proyectos).find(([id,p]) => p.password === pw);
+    const match = Object.entries(proyectos).find(([id, p]) => p.password === pw);
 
     if (!match) {
       err.textContent = '❌ Contraseña incorrecta. Contacta a tu proveedor.';
@@ -821,83 +821,64 @@ window.doClientLogin = async function() {
 
     const [id, p] = match;
 
-    // Verificar que el proyecto esté activo
     if (!p.activo) {
-      // Mostrar pantalla completa sitio desactivado
       mostrarPantallaIA('bloqueado', {
-        icono: '🔒',
-        titulo: 'Sitio Desactivado',
-        mensaje: 'Tu sitio ha sido temporalmente desactivado por el administrador.',
-        color: '#bd00ff',
-        colorBorder: 'rgba(189,0,255,.3)',
-        nota: 'Contacta a tu proveedor para reactivarlo.',
-        reintentar: false
+        icono: '🔒', titulo: 'Sitio Desactivado',
+        mensaje: 'Tu sitio ha sido desactivado por el administrador.',
+        color: '#bd00ff', colorBorder: 'rgba(189,0,255,.3)',
+        nota: 'Contacta a tu proveedor para reactivarlo.', reintentar: false
       });
       btn.disabled = false; btn.textContent = '🔓 Entrar';
       return;
     }
 
-    // Verificar expiración
     if (p.expira) {
       const exp = new Date(p.expira + 'T00:00:00');
       if (hoy > exp) {
-        const expFmt = new Date(p.expira + 'T00:00:00').toLocaleDateString('es-ES', {day:'numeric',month:'long',year:'numeric'});
+        const expFmt = exp.toLocaleDateString('es-ES', {day:'numeric',month:'long',year:'numeric'});
         mostrarPantallaIA('expirado', {
-          icono: '\u23F0',
-          titulo: 'Licencia Expirada',
+          icono: '⏰', titulo: 'Licencia Expirada',
           mensaje: 'Tu licencia expiró el ' + expFmt + '.',
-          color: '#ff3366',
-          colorBorder: 'rgba(255,51,102,.3)',
-          nota: 'Contacta a tu proveedor para renovar tu acceso.',
-          reintentar: false
+          color: '#ff3366', colorBorder: 'rgba(255,51,102,.3)',
+          nota: 'Contacta a tu proveedor para renovar.', reintentar: false
         });
         btn.disabled = false; btn.textContent = '🔓 Entrar';
         return;
       }
     }
 
-    // ¡Acceso concedido! — verificar mantenimiento individual
     if (p.mantenimiento) {
-      // Refrescar config/ia para tener mensaje actualizado
-      const iaSn = await get(ref(db,'config/ia'));
+      const iaSn = await get(ref(db,'config/ia')).catch(()=>({val:()=>({})}));
       const iaD = iaSn.val() || {};
       mostrarPantallaIA('mantenimiento', {
-        icono: '\uD83D\uDD27',
-        titulo: 'Sitio en Mantenimiento',
-        mensaje: iaD.mensaje || 'Estamos realizando mejoras en tu sitio. Volvemos muy pronto.',
-        color: '#ff6b00',
-        colorBorder: 'rgba(255,107,0,.3)',
-        nota: 'Por favor intenta nuevamente en unos minutos.',
-        reintentar: true
+        icono: '🔧', titulo: 'Sitio en Mantenimiento',
+        mensaje: iaD.mensaje || 'Estamos realizando mejoras. Volvemos muy pronto.',
+        color: '#ff6b00', colorBorder: 'rgba(255,107,0,.3)',
+        nota: 'Por favor intenta en unos minutos.', reintentar: true
       });
       btn.disabled = false; btn.textContent = '🔓 Entrar';
       return;
     }
 
-    // Pago pendiente — aviso pero permite acceder
     if (p.expira && !p.pagado) {
       const exp2 = new Date(p.expira + 'T00:00:00');
-      const hoy2 = new Date(); hoy2.setHours(0,0,0,0);
-      const dias2 = Math.ceil((exp2 - hoy2) / 86400000);
+      const dias2 = Math.ceil((exp2 - hoy) / 86400000);
       if (dias2 > 0) mostrarBannerPagoIA(dias2);
     }
 
-    // ✅ Todo OK
     selectedProyecto = { id, ...p };
-
-    // Mostrar contenido principal
     document.getElementById('clientLogin').style.display = 'none';
     document.getElementById('mainContent').classList.remove('hidden');
-
-    // Pre-seleccionar el proyecto automáticamente y mostrar paso 2
+    btn.disabled = false; btn.textContent = '🔓 Entrar';
     preselectProject(id, p);
 
   } catch(e) {
-    err.textContent = '❌ Error de conexión. Intenta de nuevo.';
+    err.textContent = '❌ Error de conexión. Recarga la página e intenta de nuevo.';
     err.style.display = 'block';
     btn.disabled = false; btn.textContent = '🔓 Entrar';
   }
 };
+
 
 document.getElementById('clientPw').addEventListener('keydown', ev => {
   if (ev.key === 'Enter') window.doClientLogin();
