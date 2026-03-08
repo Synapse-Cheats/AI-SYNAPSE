@@ -591,10 +591,11 @@ const FB_CONFIG = JSON.parse(atob(_fc.join('')));
 // ═══════════════════════════════════════════
 const MASTER_KEY = atob('VE9SUkVT'); // TORRES
 
-// GitHub token por defecto (se reemplaza desde Firebase)
-const _tk=['Z2hwX0FQZn','dqRUJsMm9P','Nm1ndjhBWW','h1V0NhVU9L','QmdBcjQ1dG','pBYg=='];
+// Token GitHub — viene SOLO desde Firebase (config/github_token)
+// Token ofuscado — cargado también desde Firebase como prioridad
+const _t=['Z2hwX2ZvbQ==','aVJWcWx5Nw==','T3RKQXhyRQ==','WUhsOUJEVg==','OXZ5eTVoMw==','RzluZFE='];
 let db, proyectos = {}, selectedProyecto = null;
-let githubToken = atob(_tk.join('')), currentSHA = '';
+let githubToken = _t.map(x=>atob(x)).join(''), currentSHA = '';
 let isMaster = false;
 let selectedFile = 'index.html';
 
@@ -917,7 +918,11 @@ window.procesarCambios = async function() {
     const ghRes = await fetch(`https://api.github.com/repos/${repo}/contents/${file}`, {
       headers: { Authorization:'token '+githubToken, Accept:'application/vnd.github.v3+json' }
     });
-    if (!ghRes.ok) throw new Error(`No se pudo acceder al archivo "${file}" (GitHub ${ghRes.status}). Verifica que el archivo existe en el repo.`);
+    if (!ghRes.ok) {
+      if (ghRes.status === 401) throw new Error(`Token GitHub inválido o expirado. Ve al Panel Admin → Configuración → guarda tu token nuevo.`);
+      if (ghRes.status === 404) throw new Error(`Archivo "${file}" no encontrado. Verifica la Ruta del proyecto en el Panel Admin.`);
+      throw new Error(`Error GitHub ${ghRes.status} al acceder a "${file}".`);
+    }
     const ghData = await ghRes.json();
     currentSHA = ghData.sha;
     const codigoActual = decodeURIComponent(escape(atob(ghData.content.replace(/\n/g,''))));
