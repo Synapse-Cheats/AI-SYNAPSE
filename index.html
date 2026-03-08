@@ -902,7 +902,10 @@ window.procesarCambios = async function() {
 
   // Determinar archivo a editar
   const customF = document.getElementById('customFile')?.value.trim();
-  const file = (isMaster && customF) ? customF : (isMaster ? selectedFile : 'index.html');
+  const baseFile = (isMaster && customF) ? customF : (isMaster ? selectedFile : 'index.html');
+  // Usar ruta del proyecto como prefijo si existe (ej: "VicleyStore" → "VicleyStore/index.html")
+  const ruta = selectedProyecto.ruta ? selectedProyecto.ruta.replace(/^\/|\/$/g,'') : '';
+  const file = ruta ? `${ruta}/${baseFile}` : baseFile;
   const repo = selectedProyecto.repo;
 
   setStep(3);
