@@ -881,6 +881,7 @@ document.getElementById('clientPw').addEventListener('keydown', ev => {
 // Pre-selecciona proyecto único del cliente
 function preselectProject(id, p) {
   document.getElementById('selName').textContent = p.nombre;
+  document.getElementById('fileSelectorWrap').classList.remove('hidden');
   document.getElementById('cardStep2').classList.remove('hidden');
   setStep(2);
   document.getElementById('cardStep1').style.display = 'none';
@@ -938,6 +939,7 @@ window.selectProject = function(id) {
   document.getElementById('pi-'+id)?.classList.add('selected');
 
   document.getElementById('selName').textContent = selectedProyecto.nombre;
+  document.getElementById('fileSelectorWrap').classList.remove('hidden');
   document.getElementById('cardStep2').classList.remove('hidden');
   document.getElementById('cardStep2').scrollIntoView({ behavior:'smooth', block:'nearest' });
   setStep(2);
@@ -960,7 +962,7 @@ window.procesarCambios = async function() {
 
   // Determinar archivo a editar
   const customF = document.getElementById('customFile')?.value.trim();
-  const baseFile = (isMaster && customF) ? customF : (isMaster ? selectedFile : 'index.html');
+  const baseFile = customF ? customF : selectedFile;
   // Usar ruta del proyecto como prefijo si existe (ej: "VicleyStore" → "VicleyStore/index.html")
   const ruta = selectedProyecto.ruta ? selectedProyecto.ruta.replace(/^\/|\/$/g,'') : '';
   const file = ruta ? `${ruta}/${baseFile}` : baseFile;
