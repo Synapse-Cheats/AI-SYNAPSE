@@ -982,41 +982,68 @@ window.procesarCambios = async function() {
 // ── POLLINATIONS AI ──────────────────────────────────
 async function callPollinationsAI(instruccion, codigoActual, archivo) {
   const esHTML = archivo.endsWith('.html') || archivo.endsWith('.htm');
-  const prompt = `Eres un experto en desarrollo web. El dueño de este sitio web te pide lo siguiente:
+  const codigoCortado = codigoActual.substring(0, 18000) + (codigoActual.length > 18000 ? '\n... [código truncado por tamaño]' : '');
+
+  const prompt = `Eres un experto desarrollador web. Modifica el archivo "${archivo}" siguiendo estas instrucciones exactas:
 
 "${instruccion}"
 
-Tu tarea es modificar el código del archivo "${archivo}" aplicando EXACTAMENTE lo que pide, manteniendo toda la funcionalidad existente.
-
 CÓDIGO ACTUAL DEL ARCHIVO:
-${codigoActual.substring(0, 14000)}${codigoActual.length > 14000 ? '\n... [código truncado]' : ''}
+${codigoCortado}
 
-INSTRUCCIONES CRÍTICAS:
-- Devuelve ÚNICAMENTE el código completo modificado del archivo
-- Sin explicaciones, sin comentarios adicionales, sin bloques markdown (sin \`\`\`)
-${esHTML ? '- Comienza directamente con <!DOCTYPE html> o <html' : '- Devuelve el código completo del archivo'}
-- Aplica EXACTAMENTE los cambios pedidos
-- NO elimines scripts, estilos ni funcionalidades existentes
-- Mantén el mismo idioma y estilo general del sitio
-- Si el cambio no aplica al archivo, devuelve el código tal cual sin cambios`;
+REGLAS OBLIGATORIAS:
+1. Responde ÚNICAMENTE con el código completo modificado
+2. SIN bloques markdown, SIN backticks, SIN explicaciones antes ni después
+3. ${esHTML ? 'Empieza exactamente con <!DOCTYPE html>' : 'Devuelve el código completo del archivo'}
+4. Aplica el cambio pedido con precisión
+5. Conserva TODA la funcionalidad, scripts y estilos existentes
+6. No cambies el idioma ni el estilo visual general del sitio`;
 
-  const res = await fetch('https://text.pollinations.ai/', {
-    method: 'POST',
-    headers: { 'Content-Type':'application/json' },
-    body: JSON.stringify({
-      messages: [{ role:'user', content:prompt }],
-      model: 'openai-large',
-      private: true,
-      seed: Math.floor(Math.random()*9999)
-    })
-  });
+  // Intento 1: openai-large
+  try {
+    const res = await fetch('https://text.pollinations.ai/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [{ role: 'user', content: prompt }],
+        model: 'openai-large',
+        private: true,
+        seed: Math.floor(Math.random() * 9999)
+      })
+    });
+    if (res.ok) {
+      let text = await res.text();
+      text = text.replace(/^```(?:html|javascript|js|css|typescript|ts)?\s*
+?/im, '')
+                 .replace(/
+?```\s*$/im, '').trim();
+      if (text && (text.includes('<') || !esHTML)) return text;
+    }
+  } catch(e) { console.warn('Intento 1 falló:', e.message); }
 
-  if (!res.ok) throw new Error(`Error de IA (${res.status}). Intenta de nuevo en unos segundos.`);
-  let text = await res.text();
-  text = text.replace(/^```(?:html|javascript|js|css)?\s*/i,'').replace(/\s*```$/,'').trim();
-  return text;
+  // Intento 2: mistral (modelo alternativo)
+  try {
+    const res2 = await fetch('https://text.pollinations.ai/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [{ role: 'user', content: prompt }],
+        model: 'mistral',
+        private: true
+      })
+    });
+    if (!res2.ok) throw new Error(`Error IA (${res2.status})`);
+    let text2 = await res2.text();
+    text2 = text2.replace(/^```(?:html|javascript|js|css|typescript|ts)?\s*
+?/im, '')
+                 .replace(/
+?```\s*$/im, '').trim();
+    if (text2 && (text2.includes('<') || !esHTML)) return text2;
+    throw new Error('Respuesta vacía de la IA');
+  } catch(e) {
+    throw new Error('La IA no está disponible ahora. Espera 1 minuto e intenta de nuevo.');
+  }
 }
-
 // ── UI HELPERS ───────────────────────────────────────
 function setStep(n) {
   for (let i=1;i<=4;i++) {
