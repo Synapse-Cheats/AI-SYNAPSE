@@ -573,7 +573,7 @@ footer {
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { getDatabase, ref, get, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
 // ═══════════════════════════════════════════
 // CONFIG FIREBASE
@@ -617,6 +617,14 @@ async function init() {
     db = getDatabase(app);
   } catch(e) {
     console.error('Firebase init error:', e);
+    // Mostrar error de conexión al usuario
+    const loginBox = document.getElementById('clientLogin');
+    if (loginBox) {
+      const errDiv = document.createElement('div');
+      errDiv.style.cssText = 'margin:12px 0;padding:12px;background:rgba(192,57,43,.1);border:1px solid rgba(192,57,43,.3);border-radius:10px;color:#c0392b;font-size:.85rem;text-align:center';
+      errDiv.textContent = '⚠️ Error de conexión con el servidor. Recarga la página.';
+      loginBox.querySelector('.login-card')?.appendChild(errDiv);
+    }
     return;
   }
 
@@ -625,8 +633,15 @@ async function init() {
     catch(e) { return null; }
   };
 
+  // Cargar todo en paralelo para mayor velocidad
+  const [brand, ghToken, pSnap, iaSnap] = await Promise.all([
+    readNode('config/brand'),
+    readNode('config/github_token'),
+    readNode('proyectos'),
+    readNode('config/ia')
+  ]);
+
   // Brand
-  const brand = await readNode('config/brand');
   if (brand) {
     document.getElementById('brandLogo').innerHTML = brand + ' <span>Studio</span>';
     document.getElementById('footerBrand').textContent = brand + ' Studio';
@@ -635,14 +650,43 @@ async function init() {
   }
 
   // GitHub token
-  const ghToken = await readNode('config/github_token');
   if (ghToken) githubToken = ghToken;
 
-  // Estado del editor IA
-  const ia = await readNode('config/ia') || {};
+  // Proyectos — SIEMPRE cargar (necesario para el login con contraseña)
+  proyectos = pSnap || {};
+
+  // Estado del editor IA — aplicar estado inicial
+  aplicarEstadoIA(iaSnap || {});
+
+  // Suscribir actualizaciones en tiempo real para config/ia
+  onValue(ref(db, 'config/ia'), (s) => {
+    aplicarEstadoIA(s.val() || {});
+  });
+
+  // También actualizar proyectos en tiempo real
+  onValue(ref(db, 'proyectos'), (s) => {
+    proyectos = s.val() || {};
+  });
+}
+
+let _pantallaIAActiva = null;
+
+let _loginDeshabilitadoPorAdmin = false;
+function aplicarEstadoIA(ia) {
+  // Si el usuario ya está logueado (mainContent visible), no interrumpir
+  const mainContent = document.getElementById('mainContent');
+  if (mainContent && !mainContent.classList.contains('hidden')) return;
+  // Si la clave maestra ya desbloqueó el acceso, no volver a bloquear
+  if (isMaster) return;
+
+  // Quitar pantalla anterior si existe
+  if (_pantallaIAActiva) {
+    _pantallaIAActiva.remove();
+    _pantallaIAActiva = null;
+  }
 
   if (ia.activa === false) {
-    mostrarPantallaIA('desactivado', {
+    _pantallaIAActiva = mostrarPantallaIA('desactivado', {
       icono: '\uD83D\uDEAB', titulo: 'Servicio No Disponible',
       mensaje: ia.mensaje || 'El editor IA está temporalmente fuera de servicio.',
       color: '#ff3366', colorBorder: 'rgba(255,51,102,.35)',
@@ -652,7 +696,7 @@ async function init() {
   }
 
   if (ia.mantenimiento === true) {
-    mostrarPantallaIA('mantenimiento', {
+    _pantallaIAActiva = mostrarPantallaIA('mantenimiento', {
       icono: '\uD83D\uDD27', titulo: 'Editor en Mantenimiento',
       mensaje: ia.mensaje || 'Estamos realizando mejoras. Volvemos muy pronto.',
       color: '#ff6b00', colorBorder: 'rgba(255,107,0,.35)',
@@ -660,10 +704,7 @@ async function init() {
     });
     return;
   }
-
-  // Cargar proyectos
-  const pSnap = await readNode('proyectos');
-  proyectos = pSnap || {};
+  // IA activa y sin mantenimiento — mostrar login normal
 }
 
 // ── Pantalla de estado IA ─────────────────────────────
@@ -672,11 +713,14 @@ function mostrarPantallaIA(tipo, cfg) {
     ? `<button onclick="location.reload()" style="margin-top:20px;padding:12px 28px;background:${cfg.color};color:#fff;border:none;border-radius:10px;font-size:.9rem;font-weight:700;cursor:pointer">\uD83D\uDD04 Reintentar</button>`
     : '';
 
-  document.getElementById('clientLogin').style.display = 'none';
+  // Quitar pantalla anterior si existe
+  document.querySelectorAll('[data-ia-screen]').forEach(el => el.remove());
+
   const mc = document.getElementById('mainContent');
   if (mc) mc.style.display = 'none';
 
   const wrap = document.createElement('div');
+  wrap.setAttribute('data-ia-screen', tipo);
   wrap.style.cssText = 'position:fixed;inset:0;background:linear-gradient(135deg,#f7f5f0,#ede9e0);display:flex;align-items:center;justify-content:center;z-index:9999';
   wrap.innerHTML = `
     <style>
@@ -700,6 +744,7 @@ function mostrarPantallaIA(tipo, cfg) {
     </div>`;
 
   document.body.appendChild(wrap);
+  return wrap; // Retornar para poder eliminarlo si cambia el estado
 }
 
 // ── LOGIN CLIENTE ─────────────────────────────────────
@@ -720,6 +765,9 @@ window.doClientLogin = async function() {
   // ══ CLAVE MAESTRA ════════════════════════════════════
   if (pw === MASTER_KEY) {
     isMaster = true;
+    // Quitar cualquier pantalla de bloqueo IA
+    document.querySelectorAll('[data-ia-screen]').forEach(el => el.remove());
+    if (_pantallaIAActiva) { _pantallaIAActiva.remove(); _pantallaIAActiva = null; }
     try {
       if (db) {
         const snap = await get(ref(db, 'proyectos'));
@@ -748,9 +796,12 @@ window.doClientLogin = async function() {
   try {
     if (!db) throw new Error('sin-db');
 
-    if (!Object.keys(proyectos).length) {
+    // Siempre recargar proyectos frescos para tener las contraseñas actualizadas
+    try {
       const snap = await get(ref(db, 'proyectos'));
       proyectos = snap.val() || {};
+    } catch(e) {
+      // Usar los que ya teníamos en memoria
     }
 
     const hoy = new Date(); hoy.setHours(0,0,0,0);
@@ -811,7 +862,13 @@ window.doClientLogin = async function() {
     preselectProject(id, p);
 
   } catch(e) {
-    err.textContent = '❌ Error de conexión. Recarga la página e intenta de nuevo.';
+    if (!db) {
+      err.textContent = '⚠️ Sin conexión a la base de datos. Recarga la página.';
+    } else if (e.message && e.message.includes('network')) {
+      err.textContent = '📶 Error de red. Verifica tu conexión e intenta de nuevo.';
+    } else {
+      err.textContent = '❌ Error de conexión. Recarga la página e intenta de nuevo.';
+    }
     err.style.display = 'block';
     btn.disabled = false; btn.textContent = '🔓 Entrar';
   }
