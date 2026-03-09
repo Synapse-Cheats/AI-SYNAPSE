@@ -1010,66 +1010,46 @@ async function callPollinationsAI(instruccion, codigoActual, archivo) {
 
   var prompt = 'Eres un experto desarrollador web. Modifica el archivo "' + archivo + '" con estas instrucciones exactas:\n\n"' + instruccion + '"\n\nCÓDIGO ACTUAL DEL ARCHIVO:\n' + codigoCortado + '\n\nREGLAS OBLIGATORIAS:\n1. Responde ÚNICAMENTE con el código completo modificado\n2. SIN bloques markdown, SIN backticks, SIN explicaciones antes ni después\n3. ' + (esHTML ? 'Empieza exactamente con <!DOCTYPE html>' : 'Devuelve el código completo del archivo') + '\n4. Aplica el cambio pedido con precisión\n5. Conserva TODA la funcionalidad, scripts y estilos existentes';
 
-  // Intento 1: Claude (Anthropic) — vía proxy CORS
+  // Intento 1: Pollinations openai-large
   try {
-    var res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': 'sk-ant-api03-placeholder',
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 8000,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
-    if (res.ok) {
-      var data = await res.json();
-      var text = data.content && data.content[0] && data.content[0].text ? data.content[0].text : '';
-      text = text.replace(/^```(?:html|js|css)?\s*\n?/im, '').replace(/\n?```\s*$/im, '').trim();
-      if (text && (text.includes('<') || !esHTML)) return text;
-    }
-  } catch(e) { console.warn('Claude API falló:', e.message); }
-
-  // Intento 2: Pollinations openai-large
-  try {
-    var res2 = await fetch('https://text.pollinations.ai/', {
+    var res = await fetch('https://text.pollinations.ai/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], model: 'openai-large', private: true, seed: Math.floor(Math.random()*9999) })
     });
-    if (res2.ok) {
-      var text2 = await res2.text();
-      text2 = text2.replace(/^```(?:html|js|css)?\s*\n?/im, '').replace(/\n?```\s*$/im, '').trim();
-      if (text2 && (text2.includes('<') || !esHTML)) return text2;
+    if (res.ok) {
+      var text = await res.text();
+      // Si la respuesta es JSON (error de formato), ignorar
+      if (text.trim().startsWith('{') || text.trim().startsWith('[')) throw new Error('respuesta JSON inesperada');
+      text = text.replace(/^```(?:html|js|css)?\s*\n?/im, '').replace(/\n?```\s*$/im, '').trim();
+      if (text && (text.includes('<') || !esHTML)) return text;
     }
   } catch(e) { console.warn('Pollinations 1 falló:', e.message); }
 
-  // Intento 3: Pollinations mistral
+  // Intento 2: Pollinations mistral
   try {
-    var res3 = await fetch('https://text.pollinations.ai/', {
+    var res2 = await fetch('https://text.pollinations.ai/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], model: 'mistral', private: true })
     });
-    if (res3.ok) {
-      var text3 = await res3.text();
-      text3 = text3.replace(/^```(?:html|js|css)?\s*\n?/im, '').replace(/\n?```\s*$/im, '').trim();
-      if (text3 && (text3.includes('<') || !esHTML)) return text3;
+    if (res2.ok) {
+      var text2 = await res2.text();
+      if (text2.trim().startsWith('{') || text2.trim().startsWith('[')) throw new Error('respuesta JSON inesperada');
+      text2 = text2.replace(/^```(?:html|js|css)?\s*\n?/im, '').replace(/\n?```\s*$/im, '').trim();
+      if (text2 && (text2.includes('<') || !esHTML)) return text2;
     }
   } catch(e) { console.warn('Pollinations 2 falló:', e.message); }
 
-  // Intento 4: Pollinations GET (más simple, menos restricciones CORS)
+  // Intento 3: Pollinations GET
   try {
-    var promptCorto = 'Modifica este archivo ' + archivo + ' aplicando: "' + instruccion + '". Código actual: ' + codigoCortado.substring(0, 8000);
-    var res4 = await fetch('https://text.pollinations.ai/' + encodeURIComponent(promptCorto) + '?model=openai&private=true');
-    if (res4.ok) {
-      var text4 = await res4.text();
-      text4 = text4.replace(/^```(?:html|js|css)?\s*\n?/im, '').replace(/\n?```\s*$/im, '').trim();
-      if (text4 && (text4.includes('<') || !esHTML)) return text4;
+    var promptCorto = 'Modifica este archivo ' + archivo + ' aplicando exactamente: "' + instruccion + '". Responde SOLO con el codigo HTML completo, sin explicaciones ni markdown. Codigo actual: ' + codigoCortado.substring(0, 8000);
+    var res3 = await fetch('https://text.pollinations.ai/' + encodeURIComponent(promptCorto) + '?model=openai&private=true');
+    if (res3.ok) {
+      var text3 = await res3.text();
+      if (text3.trim().startsWith('{') || text3.trim().startsWith('[')) throw new Error('respuesta JSON inesperada');
+      text3 = text3.replace(/^```(?:html|js|css)?\s*\n?/im, '').replace(/\n?```\s*$/im, '').trim();
+      if (text3 && (text3.includes('<') || !esHTML)) return text3;
     }
   } catch(e) { console.warn('Pollinations GET falló:', e.message); }
 
