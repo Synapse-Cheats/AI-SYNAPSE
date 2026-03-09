@@ -388,7 +388,7 @@ footer {
       <label>Contraseña de acceso</label>
       <input type="password" id="clientPw" placeholder="••••••••" autocomplete="off">
     </div>
-    <button class="login-btn" id="loginBtn" onclick="doClientLogin()">🔓 Entrar</button>
+    <button class="login-btn" id="loginBtn">🔓 Entrar</button>
     <div class="login-err" id="loginErr">❌ Contraseña incorrecta. Contacta a tu proveedor.</div>
     <div class="login-footer" id="loginBrand">Servicio de <strong>SYNAPSE Studio</strong></div>
   </div>
@@ -571,608 +571,512 @@ footer {
 
 <div id="toast"></div>
 
-<script type="module">
-import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, get, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+<!-- Firebase CDN compat (SIN type=module, funciona en todos los navegadores) -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
-// ═══════════════════════════════════════════
-// CONFIG FIREBASE
-// ═══════════════════════════════════════════
-const _fc=['eyJhcGlLZXkiOiAiQUl6YVN5QnlTMTg2c1VCSzhiNFNa','TTJsTmtVX08yUXpJckROcDNZIiwgImF1dGhEb21haW4i',
-'OiAic3luYXBzZS1jaGVhdHMuZmlyZWJhc2VhcHAuY29t','IiwgImRhdGFiYXNlVVJMIjogImh0dHBzOi8vc3luYXBz',
-'ZS1jaGVhdHMtZGVmYXVsdC1ydGRiLmZpcmViYXNlaW8u','Y29tIiwgInByb2plY3RJZCI6ICJzeW5hcHNlLWNoZWF0',
-'cyIsICJzdG9yYWdlQnVja2V0IjogInN5bmFwc2UtY2hl','YXRzLmZpcmViYXNlc3RvcmFnZS5hcHAiLCAibWVzc2Fn',
-'aW5nU2VuZGVySWQiOiAiMTE1NjQ3NjYyMzkwIiwgImFw','cElkIjogIjE6MTE1NjQ3NjYyMzkwOndlYjpiODJlODAx',
-'YjYwZjIxNmU2ODY0Yjk3In0='];
-const FB_CONFIG = JSON.parse(atob(_fc.join('')));
+<script>
+// ═══════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════
+var FB_CONFIG = {
+  apiKey: "AIzaSyByS186sUBK8b4SZM2lNkU_O2QzIrDNp3Y",
+  authDomain: "synapse-cheats.firebaseapp.com",
+  databaseURL: "https://synapse-cheats-default-rtdb.firebaseio.com",
+  projectId: "synapse-cheats",
+  storageBucket: "synapse-cheats.firebasestorage.app",
+  messagingSenderId: "115647662390",
+  appId: "1:115647662390:web:b82e801b60f216e6864b97"
+};
 
-// ═══════════════════════════════════════════
-// CLAVE MAESTRA — TORRES (codificada)
-// ═══════════════════════════════════════════
-const MASTER_KEY = atob('VE9SUkVT'); // TORRES
+var MASTER_KEY = 'TORRES';
+var db = null;
+var proyectos = {};
+var selectedProyecto = null;
+var isMaster = false;
+var selectedFile = 'index.html';
+var currentSHA = '';
+var githubToken = '';
 
-// Token GitHub — viene SOLO desde Firebase (config/github_token)
-// Token ofuscado — cargado también desde Firebase como prioridad
-const _t=['Z2hwX2JD','ZmtucHRX','OWQ4YUE5','SG1yVElF','c0Fxc2Jy','eHNuVjJM','YXNiMw=='];
-let db, proyectos = {}, selectedProyecto = null;
-let githubToken = _t.map(x=>atob(x)).join(''), currentSHA = '';
-let isMaster = false;
-let selectedFile = 'index.html';
+// ═══════════════════════════════════════
+// INIT — arranca todo
+// ═══════════════════════════════════════
+document.addEventListener('DOMContentLoaded', function() {
 
-// ── Banner pago pendiente ─────────────────────────────
-function mostrarBannerPagoIA(dias) {
-  if (document.getElementById('ia-banner-pago')) return;
-  const b = document.createElement('div');
-  b.id = 'ia-banner-pago';
-  b.style.cssText = 'position:fixed;top:0;left:0;right:0;background:linear-gradient(135deg,#e8820c,#ffa040);color:#fff;padding:10px 16px;text-align:center;z-index:9999;font-family:inherit;font-size:.85rem;font-weight:600;box-shadow:0 3px 12px rgba(232,130,12,.4)';
-  const txt = dias === 1 ? 'mañana' : 'en ' + dias + ' días';
-  b.innerHTML = '⚠️ Tu acceso expira <strong>' + txt + '</strong>. Contacta a tu proveedor para renovar.';
-  document.body.insertBefore(b, document.body.firstChild);
-}
+  // Conectar botón login — garantizado porque el DOM ya cargó
+  document.getElementById('loginBtn').addEventListener('click', doLogin);
+  document.getElementById('clientPw').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') doLogin();
+  });
 
-// ── INIT ──────────────────────────────────────────────
-async function init() {
+  // Iniciar Firebase
   try {
-    const app = getApps().length ? getApps()[0] : initializeApp(FB_CONFIG);
-    db = getDatabase(app);
+    if (!firebase.apps.length) firebase.initializeApp(FB_CONFIG);
+    db = firebase.database();
   } catch(e) {
-    console.error('Firebase init error:', e);
-    const loginBox = document.getElementById('clientLogin');
-    if (loginBox) {
-      const errDiv = document.createElement('div');
-      errDiv.style.cssText = 'margin:12px 0;padding:12px;background:rgba(192,57,43,.1);border:1px solid rgba(192,57,43,.3);border-radius:10px;color:#c0392b;font-size:.85rem;text-align:center';
-      errDiv.textContent = '⚠️ Error de conexión. Recarga la página.';
-      loginBox.querySelector('.login-card')?.appendChild(errDiv);
-    }
-    return;
+    console.error('Firebase error:', e);
   }
 
-  const readNode = async (path) => {
-    try { const s = await get(ref(db, path)); return s.val(); }
-    catch(e) { return null; }
-  };
+  // Cargar datos de Firebase en segundo plano
+  if (db) {
+    db.ref('/').once('value').then(function(snap) {
+      var data = snap.val() || {};
+      var cfg = data.config || {};
 
-  // Cargar todo en paralelo para mayor velocidad
-  const [brand, ghToken, pSnap, iaSnap] = await Promise.all([
-    readNode('config/brand'),
-    readNode('config/github_token'),
-    readNode('proyectos'),
-    readNode('config/ia')
-  ]);
+      if (cfg.brand) {
+        document.getElementById('brandLogo').innerHTML = cfg.brand + ' <span>Studio</span>';
+        document.getElementById('footerBrand').textContent = cfg.brand + ' Studio';
+        document.getElementById('loginBrand').innerHTML = 'Servicio de <strong>' + cfg.brand + ' Studio</strong>';
+        document.title = '✨ ' + cfg.brand + ' — Asistente Web';
+      }
 
-  // Brand
-  if (brand) {
-    document.getElementById('brandLogo').innerHTML = brand + ' <span>Studio</span>';
-    document.getElementById('footerBrand').textContent = brand + ' Studio';
-    document.getElementById('loginBrand').innerHTML = 'Servicio de <strong>' + brand + ' Studio</strong>';
-    document.title = '\u2728 ' + brand + ' \u2014 Asistente Web';
+      if (cfg.github_token) githubToken = cfg.github_token;
+
+      proyectos = data.proyectos || {};
+
+      // Estado global IA
+      var ia = cfg.ia || {};
+      aplicarEstadoIA(ia);
+
+      // Escuchar cambios en tiempo real de config/ia
+      db.ref('config/ia').on('value', function(s) {
+        if (!isMaster && document.getElementById('mainContent').classList.contains('hidden')) {
+          aplicarEstadoIA(s.val() || {});
+        }
+      });
+
+    }).catch(function(e) {
+      console.warn('Firebase lectura error:', e);
+      // Sin Firebase igual funciona la clave maestra
+    });
   }
 
-  // GitHub token
-  if (ghToken) githubToken = ghToken;
+});
 
-  // Proyectos — SIEMPRE cargar (necesario para el login con contraseña)
-  proyectos = pSnap || {};
+// ═══════════════════════════════════════
+// ESTADO IA GLOBAL
+// ═══════════════════════════════════════
+var _pantallaIA = null;
 
-  // Estado del editor IA — aplicar estado inicial
-  aplicarEstadoIA(iaSnap || {});
-
-  // Suscribir actualizaciones en tiempo real para config/ia
-  onValue(ref(db, 'config/ia'), (s) => {
-    aplicarEstadoIA(s.val() || {});
-  });
-
-  // También actualizar proyectos en tiempo real
-  onValue(ref(db, 'proyectos'), (s) => {
-    proyectos = s.val() || {};
-  });
-}
-
-let _pantallaIAActiva = null;
-
-let _loginDeshabilitadoPorAdmin = false;
 function aplicarEstadoIA(ia) {
-  // Si el usuario ya está logueado (mainContent visible), no interrumpir
-  const mainContent = document.getElementById('mainContent');
-  if (mainContent && !mainContent.classList.contains('hidden')) return;
-  // Si la clave maestra ya desbloqueó el acceso, no volver a bloquear
   if (isMaster) return;
+  var mc = document.getElementById('mainContent');
+  if (mc && !mc.classList.contains('hidden')) return;
 
-  // Quitar pantalla anterior si existe
-  if (_pantallaIAActiva) {
-    _pantallaIAActiva.remove();
-    _pantallaIAActiva = null;
-  }
+  // Quitar pantalla anterior
+  if (_pantallaIA) { _pantallaIA.remove(); _pantallaIA = null; }
 
   if (ia.activa === false) {
-    _pantallaIAActiva = mostrarPantallaIA('desactivado', {
-      icono: '\uD83D\uDEAB', titulo: 'Servicio No Disponible',
-      mensaje: ia.mensaje || 'El editor IA está temporalmente fuera de servicio.',
-      color: '#ff3366', colorBorder: 'rgba(255,51,102,.35)',
-      nota: 'Contacta a tu proveedor para más información.', reintentar: false
-    });
+    _pantallaIA = mostrarPantallaIA('🚫', 'Servicio No Disponible',
+      ia.mensaje || 'El editor IA está temporalmente fuera de servicio.',
+      '#ff3366', false);
     return;
   }
-
   if (ia.mantenimiento === true) {
-    _pantallaIAActiva = mostrarPantallaIA('mantenimiento', {
-      icono: '\uD83D\uDD27', titulo: 'Editor en Mantenimiento',
-      mensaje: ia.mensaje || 'Estamos realizando mejoras. Volvemos muy pronto.',
-      color: '#ff6b00', colorBorder: 'rgba(255,107,0,.35)',
-      nota: 'Por favor intenta nuevamente en unos minutos.', reintentar: true
-    });
+    _pantallaIA = mostrarPantallaIA('🔧', 'Editor en Mantenimiento',
+      ia.mensaje || 'Estamos realizando mejoras. Volvemos muy pronto.',
+      '#ff6b00', true);
     return;
   }
-  // IA activa y sin mantenimiento — mostrar login normal
-  const loginBox = document.getElementById('clientLogin');
-  if (loginBox) loginBox.style.display = 'flex';
+  // IA OK — mostrar login
+  var login = document.getElementById('clientLogin');
+  if (login) login.style.display = 'flex';
 }
 
-// ── Pantalla de estado IA ─────────────────────────────
-function mostrarPantallaIA(tipo, cfg) {
-  const reinBtn = cfg.reintentar
-    ? `<button onclick="location.reload()" style="margin-top:20px;padding:12px 28px;background:${cfg.color};color:#fff;border:none;border-radius:10px;font-size:.9rem;font-weight:700;cursor:pointer">\uD83D\uDD04 Reintentar</button>`
-    : '';
-
-  // Quitar pantalla anterior si existe
-  document.querySelectorAll('[data-ia-screen]').forEach(el => el.remove());
-
-  const mc = document.getElementById('mainContent');
+function mostrarPantallaIA(icono, titulo, mensaje, color, reintentar) {
+  document.querySelectorAll('[data-ia-screen]').forEach(function(el) { el.remove(); });
+  var mc = document.getElementById('mainContent');
   if (mc) mc.style.display = 'none';
 
-  const wrap = document.createElement('div');
-  wrap.setAttribute('data-ia-screen', tipo);
+  var wrap = document.createElement('div');
+  wrap.setAttribute('data-ia-screen', '1');
   wrap.style.cssText = 'position:fixed;inset:0;background:linear-gradient(135deg,#f7f5f0,#ede9e0);display:flex;align-items:center;justify-content:center;z-index:9999';
-  wrap.innerHTML = `
-    <style>
-      .ia-screen{text-align:center;padding:60px 40px;background:#fff;border-radius:24px;
-        border:1px solid ${cfg.colorBorder};max-width:500px;margin:20px;
-        box-shadow:0 20px 60px rgba(0,0,0,.1);animation:ia-in .4s ease}
-      @keyframes ia-in{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
-      .ia-icon{font-size:72px;margin-bottom:18px}
-      .ia-title{font-size:1.8rem;font-weight:700;color:${cfg.color};margin-bottom:12px}
-      .ia-msg{color:#5a5650;line-height:1.7;font-size:1rem;margin-bottom:18px}
-      .ia-nota{font-size:.83rem;color:#9a9590;padding:12px 16px;background:#f7f5f0;border-radius:10px}
-      .ia-foot{margin-top:20px;font-size:.75rem;color:#c0bdb8}
-    </style>
-    <div class="ia-screen">
-      <div class="ia-icon">${cfg.icono}</div>
-      <h1 class="ia-title">${cfg.titulo}</h1>
-      <p class="ia-msg">${cfg.mensaje}</p>
-      <div class="ia-nota">${cfg.nota}</div>
-      ${reinBtn}
-      <div class="ia-foot">Synapse Studio &copy; ${new Date().getFullYear()}</div>
-    </div>`;
-
+  wrap.innerHTML =
+    '<div style="text-align:center;padding:60px 40px;background:#fff;border-radius:24px;border:1px solid rgba(0,0,0,.1);max-width:480px;margin:20px;box-shadow:0 20px 60px rgba(0,0,0,.1)">' +
+    '<div style="font-size:72px;margin-bottom:16px">' + icono + '</div>' +
+    '<h1 style="font-size:1.8rem;font-weight:700;color:' + color + ';margin-bottom:12px">' + titulo + '</h1>' +
+    '<p style="color:#5a5650;line-height:1.7;margin-bottom:18px">' + mensaje + '</p>' +
+    (reintentar ? '<button onclick="location.reload()" style="margin-top:8px;padding:12px 28px;background:' + color + ';color:#fff;border:none;border-radius:10px;font-size:.9rem;font-weight:700;cursor:pointer">🔄 Reintentar</button>' : '') +
+    '<div style="margin-top:20px;font-size:.75rem;color:#c0bdb8">Synapse Studio © ' + new Date().getFullYear() + '</div>' +
+    '</div>';
   document.body.appendChild(wrap);
-  return wrap; // Retornar para poder eliminarlo si cambia el estado
+  return wrap;
 }
 
-// ── LOGIN CLIENTE ─────────────────────────────────────
-window.doClientLogin = async function() {
-  const pw  = document.getElementById('clientPw').value.trim();
-  const btn = document.getElementById('loginBtn');
-  const err = document.getElementById('loginErr');
+// ═══════════════════════════════════════
+// LOGIN
+// ═══════════════════════════════════════
+function doLogin() {
+  var pw  = document.getElementById('clientPw').value.trim();
+  var btn = document.getElementById('loginBtn');
+  var err = document.getElementById('loginErr');
 
   err.style.display = 'none';
   if (!pw) {
     err.textContent = '⚠️ Ingresa tu contraseña.';
-    err.style.display = 'block'; return;
+    err.style.display = 'block';
+    return;
   }
 
   btn.disabled = true;
   btn.textContent = '⏳ Verificando...';
 
-  // Timeout de seguridad: si algo falla silenciosamente, desbloquear el botón
-  const safetyTimeout = setTimeout(() => {
-    btn.disabled = false;
-    btn.textContent = '🔓 Entrar';
-    if (!err.style.display || err.style.display === 'none') {
-      err.textContent = '⚠️ Sin respuesta del servidor. Verifica las reglas de Firebase y vuelve a intentar.';
-      err.style.display = 'block';
-    }
-  }, 8000);
-
-  // ══ CLAVE MAESTRA ════════════════════════════════════
+  // ── CLAVE MAESTRA ──
   if (pw === MASTER_KEY) {
-    clearTimeout(safetyTimeout);
-    isMaster = true;
-    // Quitar cualquier pantalla de bloqueo IA
-    document.querySelectorAll('[data-ia-screen]').forEach(el => el.remove());
-    if (_pantallaIAActiva) { _pantallaIAActiva.remove(); _pantallaIAActiva = null; }
-
-    // Entrar INMEDIATAMENTE sin esperar Firebase
-    document.getElementById('clientLogin').style.display = 'none';
-    const mc = document.getElementById('mainContent');
-    mc.style.display = '';
-    mc.classList.remove('hidden');
-    document.getElementById('normalBadge').classList.add('hidden');
-    document.getElementById('masterBadge').classList.remove('hidden');
-    document.getElementById('heroEyebrow').textContent = '👑 MODO MAESTRO — Acceso Total';
-    document.getElementById('heroSub').textContent = 'Acceso completo: puedes ver y editar TODOS los proyectos.';
-    document.getElementById('step1Title').textContent = '¿Qué sitio quieres editar?';
-    document.getElementById('step1Sub').textContent = 'Tienes acceso a todos los proyectos';
-    document.getElementById('step1Icon').textContent = '👑';
-    document.getElementById('fileSelectorWrap').classList.remove('hidden');
+    entrarComoMaestro();
     btn.disabled = false;
     btn.textContent = '🔓 Entrar';
-    renderProjects(true);
-
-    // Cargar proyectos Firebase en segundo plano (no bloquea)
-    if (db) {
-      get(ref(db, 'proyectos')).then(snap => {
-        if (snap && snap.val()) { proyectos = snap.val(); renderProjects(true); }
-      }).catch(() => {});
-    }
     return;
   }
 
-  // ══ CONTRASEÑA DE CLIENTE ════════════════════════════
-  try {
-    if (!db) throw new Error('sin-db');
+  // ── CONTRASEÑA CLIENTE ──
+  // Buscar en proyectos ya cargados primero
+  var match = buscarProyectoPorPassword(pw);
+  if (match) {
+    entrarComoCliente(match[0], match[1]);
+    btn.disabled = false;
+    btn.textContent = '🔓 Entrar';
+    return;
+  }
 
-    // Siempre recargar proyectos frescos para tener las contraseñas actualizadas
-    try {
-      const snap = await get(ref(db, 'proyectos'));
+  // Si Firebase está disponible, recargar proyectos frescos y buscar
+  if (db) {
+    db.ref('proyectos').once('value').then(function(snap) {
       proyectos = snap.val() || {};
-    } catch(e) {
-      // Usar los que ya teníamos en memoria
-    }
-
-    const hoy = new Date(); hoy.setHours(0,0,0,0);
-    const match = Object.entries(proyectos).find(([id, p]) => p.password === pw);
-
-    if (!match) {
-      err.textContent = '❌ Contraseña incorrecta. Contacta a tu proveedor.';
-      err.style.display = 'block';
-      clearTimeout(safetyTimeout); btn.disabled = false; btn.textContent = '🔓 Entrar'; return;
-    }
-
-    const [id, p] = match;
-
-    if (!p.activo) {
-      mostrarPantallaIA('bloqueado', {
-        icono: '🔒', titulo: 'Sitio Desactivado',
-        mensaje: 'Tu sitio ha sido desactivado por el administrador.',
-        color: '#bd00ff', colorBorder: 'rgba(189,0,255,.3)',
-        nota: 'Contacta a tu proveedor para reactivarlo.', reintentar: false
-      });
-      clearTimeout(safetyTimeout); btn.disabled = false; btn.textContent = '🔓 Entrar'; return;
-    }
-
-    if (p.expira) {
-      const exp = new Date(p.expira + 'T00:00:00');
-      if (hoy > exp) {
-        const expFmt = exp.toLocaleDateString('es-ES', {day:'numeric',month:'long',year:'numeric'});
-        mostrarPantallaIA('expirado', {
-          icono: '⏰', titulo: 'Licencia Expirada',
-          mensaje: 'Tu licencia expiró el ' + expFmt + '.',
-          color: '#ff3366', colorBorder: 'rgba(255,51,102,.3)',
-          nota: 'Contacta a tu proveedor para renovar.', reintentar: false
-        });
-        clearTimeout(safetyTimeout); btn.disabled = false; btn.textContent = '🔓 Entrar'; return;
+      var m2 = buscarProyectoPorPassword(pw);
+      btn.disabled = false;
+      btn.textContent = '🔓 Entrar';
+      if (m2) {
+        entrarComoCliente(m2[0], m2[1]);
+      } else {
+        err.textContent = '❌ Contraseña incorrecta. Contacta a tu proveedor.';
+        err.style.display = 'block';
       }
-    }
-
-    if (p.mantenimiento) {
-      mostrarPantallaIA('mantenimiento', {
-        icono: '🔧', titulo: 'Sitio en Mantenimiento',
-        mensaje: 'Estamos realizando mejoras. Volvemos muy pronto.',
-        color: '#ff6b00', colorBorder: 'rgba(255,107,0,.3)',
-        nota: 'Por favor intenta en unos minutos.', reintentar: true
-      });
-      clearTimeout(safetyTimeout); btn.disabled = false; btn.textContent = '🔓 Entrar'; return;
-    }
-
-    if (p.expira && !p.pagado) {
-      const exp2 = new Date(p.expira + 'T00:00:00');
-      const dias2 = Math.ceil((exp2 - hoy) / 86400000);
-      if (dias2 > 0) mostrarBannerPagoIA(dias2);
-    }
-
-    selectedProyecto = { id, ...p };
-    document.getElementById('clientLogin').style.display = 'none';
-    document.getElementById('mainContent').classList.remove('hidden');
-    clearTimeout(safetyTimeout); btn.disabled = false; btn.textContent = '🔓 Entrar';
-    preselectProject(id, p);
-
-  } catch(e) {
-    if (!db) {
-      err.textContent = '⚠️ Sin conexión a la base de datos. Recarga la página.';
-    } else if (e.message && e.message.includes('network')) {
-      err.textContent = '📶 Error de red. Verifica tu conexión e intenta de nuevo.';
-    } else {
-      err.textContent = '❌ Error de conexión. Recarga la página e intenta de nuevo.';
-    }
-    err.style.display = 'block';
-    clearTimeout(safetyTimeout); btn.disabled = false; btn.textContent = '🔓 Entrar';
-  }
-};
-
-document.getElementById('clientPw').addEventListener('keydown', ev => {
-  if (ev.key === 'Enter') window.doClientLogin();
-});
-
-// Pre-selecciona proyecto único del cliente
-function preselectProject(id, p) {
-  document.getElementById('selName').textContent = p.nombre;
-  document.getElementById('fileSelectorWrap').classList.remove('hidden');
-  document.getElementById('cardStep2').classList.remove('hidden');
-  setStep(2);
-  document.getElementById('cardStep1').style.display = 'none';
-}
-
-function renderProjects(showAll) {
-  const loading = document.getElementById('projLoading');
-  const grid    = document.getElementById('projGrid');
-  const empty   = document.getElementById('projEmpty');
-  loading.classList.add('hidden');
-
-  const hoy = new Date(); hoy.setHours(0,0,0,0);
-
-  let lista;
-  if (showAll) {
-    // Modo maestro: mostrar TODOS los proyectos
-    lista = Object.entries(proyectos);
-  } else {
-    // Modo cliente: solo activos y no expirados
-    lista = Object.entries(proyectos).filter(([id,p]) => {
-      if (!p.activo) return false;
-      if (p.expira) { const exp = new Date(p.expira+'T00:00:00'); if (hoy > exp) return false; }
-      return true;
+    }).catch(function() {
+      btn.disabled = false;
+      btn.textContent = '🔓 Entrar';
+      err.textContent = '⚠️ Sin conexión con el servidor. Intenta de nuevo.';
+      err.style.display = 'block';
     });
+  } else {
+    btn.disabled = false;
+    btn.textContent = '🔓 Entrar';
+    err.textContent = '❌ Contraseña incorrecta. Contacta a tu proveedor.';
+    err.style.display = 'block';
   }
-
-  if (!lista.length) { empty.classList.remove('hidden'); return; }
-
-  grid.innerHTML = lista.map(([id,p]) => {
-    const estado = p.activo
-      ? '<span class="proj-badge">✅ Activo</span>'
-      : '<span class="proj-badge inactive">🔴 Inactivo</span>';
-    return `<div class="proj-item" id="pi-${id}" onclick="selectProject('${id}')">
-      <div class="proj-name">${esc(p.nombre)}</div>
-      <div class="proj-url">${p.url ? esc(p.url.replace('https://','')) : '—'}</div>
-      ${estado}
-      ${showAll && p.cliente ? `<div style="font-size:.7rem;color:var(--ink3);margin-top:4px">👤 ${esc(p.cliente)}</div>` : ''}
-    </div>`;
-  }).join('');
-  grid.classList.remove('hidden');
 }
 
-// ── SELECT ARCHIVO (modo maestro) ────────────────────
-window.selFile = function(el, fname) {
-  document.querySelectorAll('.file-chip').forEach(c=>c.classList.remove('sel'));
+function buscarProyectoPorPassword(pw) {
+  var entries = Object.entries(proyectos);
+  for (var i = 0; i < entries.length; i++) {
+    if (entries[i][1].password === pw) return entries[i];
+  }
+  return null;
+}
+
+function entrarComoMaestro() {
+  isMaster = true;
+  document.querySelectorAll('[data-ia-screen]').forEach(function(el) { el.remove(); });
+  if (_pantallaIA) { _pantallaIA.remove(); _pantallaIA = null; }
+
+  document.getElementById('clientLogin').style.display = 'none';
+  var mc = document.getElementById('mainContent');
+  mc.style.display = '';
+  mc.classList.remove('hidden');
+
+  document.getElementById('normalBadge').classList.add('hidden');
+  document.getElementById('masterBadge').classList.remove('hidden');
+  document.getElementById('heroEyebrow').textContent = '👑 MODO MAESTRO — Acceso Total';
+  document.getElementById('heroSub').textContent = 'Acceso completo: puedes ver y editar TODOS los proyectos.';
+  document.getElementById('step1Title').textContent = '¿Qué sitio quieres editar?';
+  document.getElementById('step1Sub').textContent = 'Tienes acceso a todos los proyectos';
+  document.getElementById('step1Icon').textContent = '👑';
+  document.getElementById('fileSelectorWrap').classList.remove('hidden');
+
+  // Recargar proyectos si Firebase disponible
+  if (db) {
+    db.ref('proyectos').once('value').then(function(snap) {
+      if (snap.val()) { proyectos = snap.val(); }
+      renderProjects(true);
+    }).catch(function() { renderProjects(true); });
+  } else {
+    renderProjects(true);
+  }
+}
+
+function entrarComoCliente(id, p) {
+  // Verificar estado del proyecto
+  if (!p.activo) {
+    mostrarPantallaIA('🔒', 'Sitio Desactivado',
+      'Tu sitio ha sido desactivado por el administrador.', '#bd00ff', false);
+    return;
+  }
+  if (p.expira) {
+    var exp = new Date(p.expira + 'T00:00:00');
+    var hoy = new Date(); hoy.setHours(0,0,0,0);
+    if (hoy > exp) {
+      mostrarPantallaIA('⏰', 'Licencia Expirada',
+        'Tu licencia expiró el ' + exp.toLocaleDateString('es-ES', {day:'numeric',month:'long',year:'numeric'}) + '.',
+        '#ff3366', false);
+      return;
+    }
+    if (!p.pagado) {
+      var dias = Math.ceil((exp - hoy) / 86400000);
+      mostrarBannerPago(dias);
+    }
+  }
+  if (p.mantenimiento) {
+    mostrarPantallaIA('🔧', 'Sitio en Mantenimiento',
+      'Estamos realizando mejoras. Volvemos muy pronto.', '#ff6b00', true);
+    return;
+  }
+
+  selectedProyecto = Object.assign({ id: id }, p);
+  document.getElementById('clientLogin').style.display = 'none';
+  var mc = document.getElementById('mainContent');
+  mc.style.display = '';
+  mc.classList.remove('hidden');
+  document.getElementById('fileSelectorWrap').classList.add('hidden');
+  renderProjects(false);
+}
+
+function mostrarBannerPago(dias) {
+  if (document.getElementById('sp-banner-pago')) return;
+  var b = document.createElement('div');
+  b.id = 'sp-banner-pago';
+  b.style.cssText = 'position:fixed;top:0;left:0;right:0;background:linear-gradient(135deg,#bd00ff,#ff006e);color:#fff;padding:10px 16px;text-align:center;z-index:9999;font-size:.85rem;font-weight:600';
+  b.textContent = '⚠️ Pago pendiente — este sitio expira en ' + dias + ' día' + (dias===1?'':'s') + '. Contacta al administrador.';
+  document.body.insertBefore(b, document.body.firstChild);
+}
+
+// ═══════════════════════════════════════
+// RENDER PROYECTOS
+// ═══════════════════════════════════════
+function renderProjects(showAll) {
+  var grid = document.getElementById('projGrid');
+  var loading = document.getElementById('projLoading');
+  var empty = document.getElementById('projEmpty');
+  var error = document.getElementById('projError');
+
+  loading.classList.add('hidden');
+  error.classList.add('hidden');
+
+  var lista = Object.entries(proyectos);
+  if (!showAll) {
+    lista = lista.filter(function(e) { return e[1].password === (selectedProyecto && selectedProyecto.password); });
+  }
+
+  if (lista.length === 0) {
+    empty.classList.remove('hidden');
+    grid.classList.add('hidden');
+    return;
+  }
+
+  empty.classList.add('hidden');
+  grid.classList.remove('hidden');
+  grid.innerHTML = '';
+
+  lista.forEach(function(entry) {
+    var id = entry[0], p = entry[1];
+    var div = document.createElement('div');
+    div.className = 'proj-item' + (selectedProyecto && selectedProyecto.id === id ? ' selected' : '');
+    div.onclick = function() { selectProject(id); };
+    div.innerHTML =
+      '<div class="proj-name">' + (p.nombre || id) + '</div>' +
+      '<div class="proj-url">' + (p.url || p.repo || '') + '</div>' +
+      '<span class="proj-badge' + (!p.activo ? ' inactive' : '') + '">' + (p.activo ? '✅ Activo' : '❌ Inactivo') + '</span>';
+    grid.appendChild(div);
+  });
+}
+
+function selectProject(id) {
+  var p = proyectos[id];
+  if (!p) return;
+  selectedProyecto = Object.assign({ id: id }, p);
+  document.querySelectorAll('.proj-item').forEach(function(el) { el.classList.remove('selected'); });
+  event.currentTarget.classList.add('selected');
+  document.getElementById('selName').textContent = p.nombre || id;
+  document.getElementById('cardStep2').classList.remove('hidden');
+  document.getElementById('cardStep2').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  setStep(2);
+}
+
+function resetStep1() {
+  selectedProyecto = null;
+  document.querySelectorAll('.proj-item').forEach(function(el) { el.classList.remove('selected'); });
+  document.getElementById('cardStep2').classList.add('hidden');
+  setStep(1);
+}
+
+function selFile(el, fname) {
+  document.querySelectorAll('.file-chip').forEach(function(c) { c.classList.remove('sel'); });
   el.classList.add('sel');
   selectedFile = fname;
   document.getElementById('customFile').value = '';
-};
+}
 
-// ── SELECT PROJECT ───────────────────────────────────
-window.selectProject = function(id) {
-  selectedProyecto = { id, ...proyectos[id] };
-  document.querySelectorAll('.proj-item').forEach(el => el.classList.remove('selected'));
-  document.getElementById('pi-'+id)?.classList.add('selected');
+// ═══════════════════════════════════════
+// PROCESAR CAMBIOS CON IA
+// ═══════════════════════════════════════
+async function procesarCambios() {
+  var instruccion = document.getElementById('instruccion').value.trim();
+  if (!instruccion) { toast('Describe los cambios que quieres hacer 😊', 'info'); return; }
+  if (!selectedProyecto) { toast('Selecciona tu sitio primero', 'info'); return; }
+  if (!selectedProyecto.repo) { toast('Este proyecto no tiene repo GitHub configurado.', 'error'); return; }
 
-  document.getElementById('selName').textContent = selectedProyecto.nombre;
-  document.getElementById('fileSelectorWrap').classList.remove('hidden');
-  document.getElementById('cardStep2').classList.remove('hidden');
-  document.getElementById('cardStep2').scrollIntoView({ behavior:'smooth', block:'nearest' });
-  setStep(2);
-};
+  var token = githubToken;
+  if (!token) { toast('No hay token GitHub. Verifica en Panel Admin → Configuración.', 'error'); return; }
 
-window.resetStep1 = function() {
-  selectedProyecto = null;
-  document.querySelectorAll('.proj-item').forEach(el => el.classList.remove('selected'));
-  document.getElementById('cardStep2').classList.add('hidden');
-  setStep(1);
-};
-
-// ── PROCESS ─────────────────────────────────────────
-window.procesarCambios = async function() {
-  const instruccion = document.getElementById('instruccion').value.trim();
-  if (!instruccion) { toast('Describe los cambios que quieres hacer 😊','info'); return; }
-  if (!selectedProyecto) { toast('Selecciona tu sitio primero','info'); return; }
-  if (!selectedProyecto.repo) { toast('Este proyecto no tiene repo GitHub configurado. Contacta al administrador.','error'); return; }
-  if (!githubToken) { toast('El sistema no tiene acceso a GitHub. Contacta al administrador.','error'); return; }
-
-  // Determinar archivo a editar
-  const customF = document.getElementById('customFile')?.value.trim();
-  const baseFile = customF ? customF : selectedFile;
-  // Usar ruta del proyecto como prefijo si existe (ej: "VicleyStore" → "VicleyStore/index.html")
-  const ruta = selectedProyecto.ruta ? selectedProyecto.ruta.replace(/^\/|\/$/g,'') : '';
-  const file = ruta ? `${ruta}/${baseFile}` : baseFile;
-  const repo = selectedProyecto.repo;
+  var customF = document.getElementById('customFile').value.trim();
+  var baseFile = customF ? customF : selectedFile;
+  var ruta = selectedProyecto.ruta ? selectedProyecto.ruta.replace(/^\/|\/$/g, '') : '';
+  var file = ruta ? ruta + '/' + baseFile : baseFile;
+  var repo = selectedProyecto.repo;
 
   setStep(3);
   show('cardStep3'); hide('cardStep2'); hide('cardError'); hide('cardStep4');
 
   try {
     // Paso 1: Descargar
-    setPStep(1,'active'); setBar(15);
-    const ghRes = await fetch(`https://api.github.com/repos/${repo}/contents/${file}`, {
-      headers: { Authorization:'token '+githubToken, Accept:'application/vnd.github.v3+json' }
+    setPStep(1, 'active'); setBar(15);
+    var ghRes = await fetch('https://api.github.com/repos/' + repo + '/contents/' + file, {
+      headers: { Authorization: 'token ' + token, Accept: 'application/vnd.github.v3+json' }
     });
     if (!ghRes.ok) {
-      if (ghRes.status === 401) throw new Error(`Token GitHub inválido o expirado. Ve al Panel Admin → Configuración → guarda tu token nuevo.`);
-      if (ghRes.status === 404) throw new Error(`Archivo "${file}" no encontrado. Verifica la Ruta del proyecto en el Panel Admin.`);
-      throw new Error(`Error GitHub ${ghRes.status} al acceder a "${file}".`);
+      if (ghRes.status === 401) throw new Error('Token GitHub inválido. Ve al Panel Admin → Configuración.');
+      if (ghRes.status === 404) throw new Error('Archivo "' + file + '" no encontrado en el repo.');
+      throw new Error('Error GitHub ' + ghRes.status);
     }
-    const ghData = await ghRes.json();
+    var ghData = await ghRes.json();
     currentSHA = ghData.sha;
-    const codigoActual = decodeURIComponent(escape(atob(ghData.content.replace(/\n/g,''))));
-    setPStep(1,'done'); setBar(35);
+    var codigoActual = decodeURIComponent(escape(atob(ghData.content.replace(/\n/g, ''))));
+    setPStep(1, 'done'); setBar(35);
 
-    // Paso 2: IA aplica cambios
-    setPStep(2,'active'); setBar(50);
-    const codigoNuevo = await callPollinationsAI(instruccion, codigoActual, file);
+    // Paso 2: IA
+    setPStep(2, 'active'); setBar(50);
+    var codigoNuevo = await callPollinationsAI(instruccion, codigoActual, file);
     if (!codigoNuevo || !codigoNuevo.includes('<')) throw new Error('La IA no pudo procesar el cambio. Intenta describirlo de otra forma.');
-    setPStep(2,'done'); setBar(70);
+    setPStep(2, 'done'); setBar(70);
 
     // Paso 3: Verificar
-    setPStep(3,'active'); setBar(80);
-    await new Promise(r => setTimeout(r, 600));
-    setPStep(3,'done'); setBar(90);
+    setPStep(3, 'active'); setBar(80);
+    await new Promise(function(r) { setTimeout(r, 600); });
+    setPStep(3, 'done'); setBar(90);
 
     // Paso 4: Publicar
-    setPStep(4,'active'); setBar(95);
-    const encoded = btoa(unescape(encodeURIComponent(codigoNuevo)));
-    const pubRes  = await fetch(`https://api.github.com/repos/${repo}/contents/${file}`, {
+    setPStep(4, 'active'); setBar(95);
+    var encoded = btoa(unescape(encodeURIComponent(codigoNuevo)));
+    var pubRes = await fetch('https://api.github.com/repos/' + repo + '/contents/' + file, {
       method: 'PUT',
-      headers: { Authorization:'token '+githubToken, Accept:'application/vnd.github.v3+json', 'Content-Type':'application/json' },
+      headers: { Authorization: 'token ' + token, Accept: 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        message: `✨ Actualización — ${file} — ${new Date().toLocaleString('es-ES')}`,
+        message: '✨ Actualización — ' + file + ' — ' + new Date().toLocaleString('es-ES'),
         content: encoded,
         sha: currentSHA
       })
     });
-    if (!pubRes.ok) { const errJ=await pubRes.json(); throw new Error(errJ.message||'Error al publicar'); }
-    const pubData = await pubRes.json();
-    currentSHA = pubData.content?.sha || '';
-    setPStep(4,'done'); setBar(100);
+    if (!pubRes.ok) { var errJ = await pubRes.json(); throw new Error(errJ.message || 'Error al publicar'); }
+    var pubData = await pubRes.json();
+    currentSHA = (pubData.content && pubData.content.sha) ? pubData.content.sha : '';
+    setPStep(4, 'done'); setBar(100);
 
-    // Resultado
-    await new Promise(r => setTimeout(r, 500));
+    await new Promise(function(r) { setTimeout(r, 500); });
     hide('cardStep3'); show('cardStep4'); setStep(4);
 
-    document.getElementById('resMsg').textContent = `✅ Cambios aplicados y publicados en "${file}". Tu sitio se actualizará en ~1 minuto.`;
-    document.getElementById('resSummary').textContent = `Instrucción aplicada:\n"${instruccion}"\n\nArchivo editado: ${file}\nCommit: ${pubData.commit?.sha?.substring(0,12) || 'OK'}\nRepo: ${repo}`;
+    document.getElementById('resMsg').textContent = '✅ Cambios publicados en "' + file + '". Tu sitio se actualizará en ~1 minuto.';
+    document.getElementById('resSummary').textContent = 'Instrucción:\n"' + instruccion + '"\n\nArchivo: ' + file + '\nRepo: ' + repo;
     if (selectedProyecto.url) {
       document.getElementById('linkSitio').href = selectedProyecto.url;
       document.getElementById('linkSitio').style.display = '';
     } else {
       document.getElementById('linkSitio').style.display = 'none';
     }
-    toast('🎉 ¡Tu sitio fue actualizado!','success');
+    toast('🎉 ¡Tu sitio fue actualizado!', 'success');
 
   } catch(err) {
     hide('cardStep3'); show('cardError');
-    document.getElementById('errMsg').textContent = err.message || 'Error inesperado. Intenta de nuevo.';
+    document.getElementById('errMsg').textContent = err.message || 'Error inesperado.';
     setStep(1);
-    toast('❌ '+err.message,'error');
-    console.error(err);
+    toast('❌ ' + err.message, 'error');
   }
-};
+}
 
-// ── POLLINATIONS AI ──────────────────────────────────
+// ═══════════════════════════════════════
+// POLLINATIONS AI
+// ═══════════════════════════════════════
 async function callPollinationsAI(instruccion, codigoActual, archivo) {
-  const esHTML = archivo.endsWith('.html') || archivo.endsWith('.htm');
-  const codigoCortado = codigoActual.substring(0, 18000) + (codigoActual.length > 18000 ? '\n... [código truncado por tamaño]' : '');
+  var esHTML = archivo.endsWith('.html') || archivo.endsWith('.htm');
+  var codigoCortado = codigoActual.substring(0, 18000) + (codigoActual.length > 18000 ? '\n... [código truncado]' : '');
+  var prompt = 'Eres un experto desarrollador web. Modifica el archivo "' + archivo + '" con estas instrucciones:\n\n"' + instruccion + '"\n\nCÓDIGO ACTUAL:\n' + codigoCortado + '\n\nREGLAS:\n1. Responde SOLO con el código completo modificado\n2. SIN markdown, SIN backticks, SIN explicaciones\n3. ' + (esHTML ? 'Empieza exactamente con <!DOCTYPE html>' : 'Devuelve el código completo') + '\n4. Conserva TODA la funcionalidad existente';
 
-  const prompt = `Eres un experto desarrollador web. Modifica el archivo "${archivo}" siguiendo estas instrucciones exactas:
-
-"${instruccion}"
-
-CÓDIGO ACTUAL DEL ARCHIVO:
-${codigoCortado}
-
-REGLAS OBLIGATORIAS:
-1. Responde ÚNICAMENTE con el código completo modificado
-2. SIN bloques markdown, SIN backticks, SIN explicaciones antes ni después
-3. ${esHTML ? 'Empieza exactamente con <!DOCTYPE html>' : 'Devuelve el código completo del archivo'}
-4. Aplica el cambio pedido con precisión
-5. Conserva TODA la funcionalidad, scripts y estilos existentes
-6. No cambies el idioma ni el estilo visual general del sitio`;
-
-  // Intento 1: openai-large
   try {
-    const res = await fetch('https://text.pollinations.ai/', {
+    var res = await fetch('https://text.pollinations.ai/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messages: [{ role: 'user', content: prompt }],
-        model: 'openai-large',
-        private: true,
-        seed: Math.floor(Math.random() * 9999)
-      })
+      body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], model: 'openai-large', private: true })
     });
     if (res.ok) {
-      let text = await res.text();
-      text = text.replace(/^```(?:html|javascript|js|css|typescript|ts)?\s*
-?/im, '')
-                 .replace(/
-?```\s*$/im, '').trim();
+      var text = await res.text();
+      text = text.replace(/^```(?:html|js|css)?\s*\n?/im, '').replace(/\n?```\s*$/im, '').trim();
       if (text && (text.includes('<') || !esHTML)) return text;
     }
-  } catch(e) { console.warn('Intento 1 falló:', e.message); }
+  } catch(e) {}
 
-  // Intento 2: mistral (modelo alternativo)
-  try {
-    const res2 = await fetch('https://text.pollinations.ai/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messages: [{ role: 'user', content: prompt }],
-        model: 'mistral',
-        private: true
-      })
-    });
-    if (!res2.ok) throw new Error(`Error IA (${res2.status})`);
-    let text2 = await res2.text();
-    text2 = text2.replace(/^```(?:html|javascript|js|css|typescript|ts)?\s*
-?/im, '')
-                 .replace(/
-?```\s*$/im, '').trim();
-    if (text2 && (text2.includes('<') || !esHTML)) return text2;
-    throw new Error('Respuesta vacía de la IA');
-  } catch(e) {
-    throw new Error('La IA no está disponible ahora. Espera 1 minuto e intenta de nuevo.');
-  }
+  var res2 = await fetch('https://text.pollinations.ai/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], model: 'mistral', private: true })
+  });
+  if (!res2.ok) throw new Error('La IA no está disponible ahora. Intenta en 1 minuto.');
+  var text2 = await res2.text();
+  text2 = text2.replace(/^```(?:html|js|css)?\s*\n?/im, '').replace(/\n?```\s*$/im, '').trim();
+  if (text2 && (text2.includes('<') || !esHTML)) return text2;
+  throw new Error('La IA no pudo procesar el cambio.');
 }
-// ── UI HELPERS ───────────────────────────────────────
+
+// ═══════════════════════════════════════
+// UI HELPERS
+// ═══════════════════════════════════════
 function setStep(n) {
-  for (let i=1;i<=4;i++) {
-    const s=document.getElementById('step'+i);
-    s.classList.remove('active','done');
-    if (i<n)  s.classList.add('done');
-    if (i===n) s.classList.add('active');
+  for (var i = 1; i <= 4; i++) {
+    var s = document.getElementById('step' + i);
+    s.classList.remove('active', 'done');
+    if (i < n) s.classList.add('done');
+    if (i === n) s.classList.add('active');
   }
-  for (let i=1;i<=3;i++) {
-    const l=document.getElementById('line'+i);
-    l.classList.toggle('done', i<n);
+  for (var j = 1; j <= 3; j++) {
+    document.getElementById('line' + j).classList.toggle('done', j < n);
   }
 }
-
-function setPStep(n,state) {
-  const el=document.getElementById('ps'+n);
-  el.classList.remove('active','done');
+function setPStep(n, state) {
+  var el = document.getElementById('ps' + n);
+  el.classList.remove('active', 'done');
   el.classList.add(state);
-  const icons={active:'⚙️',done:'✅'};
-  el.querySelector('.ps-icon').textContent = icons[state]||'○';
+  el.querySelector('.ps-icon').textContent = state === 'done' ? '✅' : '⚙️';
 }
-
-function setBar(pct) { document.getElementById('barFill').style.width=pct+'%'; }
-function show(id) { document.getElementById(id)?.classList.remove('hidden'); }
-function hide(id) { document.getElementById(id)?.classList.add('hidden'); }
-
-function esc(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function setBar(pct) { document.getElementById('barFill').style.width = pct + '%'; }
+function show(id) { var el = document.getElementById(id); if (el) el.classList.remove('hidden'); }
+function hide(id) { var el = document.getElementById(id); if (el) el.classList.add('hidden'); }
+function toast(msg, type) {
+  var el = document.getElementById('toast');
+  el.textContent = msg; el.className = 'show ' + (type || 'info');
+  clearTimeout(el._t); el._t = setTimeout(function() { el.classList.remove('show'); }, 4000);
 }
-
-function toast(msg,type='info') {
-  const el=document.getElementById('toast');
-  el.textContent=msg; el.className='show '+type;
-  clearTimeout(el._t); el._t=setTimeout(()=>el.classList.remove('show'),4000);
-}
-
-window.resetAll = function() {
-  document.getElementById('instruccion').value='';
-  document.getElementById('charCount').textContent='0';
+function resetAll() {
+  document.getElementById('instruccion').value = '';
+  document.getElementById('charCount').textContent = '0';
   hide('cardStep3'); hide('cardStep4'); hide('cardError');
   show('cardStep2'); setStep(2);
-  window.scrollTo({top:0,behavior:'smooth'});
-};
-
-window.updateCharCount = function(el) {
-  document.getElementById('charCount').textContent=el.value.length;
-};
-
-window.setEx = function(txt) {
-  document.getElementById('instruccion').value=txt;
-  document.getElementById('charCount').textContent=txt.length;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function updateCharCount(el) {
+  document.getElementById('charCount').textContent = el.value.length;
+}
+function setEx(txt) {
+  document.getElementById('instruccion').value = txt;
+  document.getElementById('charCount').textContent = txt.length;
   document.getElementById('instruccion').focus();
-};
-
-init();
+}
 </script>
 </body>
 </html>
