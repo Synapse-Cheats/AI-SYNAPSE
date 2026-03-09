@@ -704,6 +704,8 @@ function aplicarEstadoIA(ia) {
     return;
   }
   // IA activa y sin mantenimiento — mostrar login normal
+  const loginBox = document.getElementById('clientLogin');
+  if (loginBox) loginBox.style.display = 'flex';
 }
 
 // ── Pantalla de estado IA ─────────────────────────────
@@ -773,19 +775,17 @@ window.doClientLogin = async function() {
 
   // ══ CLAVE MAESTRA ════════════════════════════════════
   if (pw === MASTER_KEY) {
+    clearTimeout(safetyTimeout);
     isMaster = true;
     // Quitar cualquier pantalla de bloqueo IA
     document.querySelectorAll('[data-ia-screen]').forEach(el => el.remove());
     if (_pantallaIAActiva) { _pantallaIAActiva.remove(); _pantallaIAActiva = null; }
-    try {
-      if (db) {
-        const snap = await get(ref(db, 'proyectos'));
-        proyectos = snap.val() || {};
-      }
-    } catch(e) {}
 
+    // Entrar INMEDIATAMENTE sin esperar Firebase
     document.getElementById('clientLogin').style.display = 'none';
-    document.getElementById('mainContent').classList.remove('hidden');
+    const mc = document.getElementById('mainContent');
+    mc.style.display = '';
+    mc.classList.remove('hidden');
     document.getElementById('normalBadge').classList.add('hidden');
     document.getElementById('masterBadge').classList.remove('hidden');
     document.getElementById('heroEyebrow').textContent = '👑 MODO MAESTRO — Acceso Total';
@@ -794,11 +794,16 @@ window.doClientLogin = async function() {
     document.getElementById('step1Sub').textContent = 'Tienes acceso a todos los proyectos';
     document.getElementById('step1Icon').textContent = '👑';
     document.getElementById('fileSelectorWrap').classList.remove('hidden');
-
-    clearTimeout(safetyTimeout);
     btn.disabled = false;
     btn.textContent = '🔓 Entrar';
-    renderProjects(true); // true = mostrar todos
+    renderProjects(true);
+
+    // Cargar proyectos Firebase en segundo plano (no bloquea)
+    if (db) {
+      get(ref(db, 'proyectos')).then(snap => {
+        if (snap && snap.val()) { proyectos = snap.val(); renderProjects(true); }
+      }).catch(() => {});
+    }
     return;
   }
 
