@@ -572,7 +572,7 @@ footer {
 <div id="toast"></div>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getDatabase, ref, get, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
 // ═══════════════════════════════════════════
@@ -613,16 +613,15 @@ function mostrarBannerPagoIA(dias) {
 // ── INIT ──────────────────────────────────────────────
 async function init() {
   try {
-    const app = initializeApp(FB_CONFIG);
+    const app = getApps().length ? getApps()[0] : initializeApp(FB_CONFIG);
     db = getDatabase(app);
   } catch(e) {
     console.error('Firebase init error:', e);
-    // Mostrar error de conexión al usuario
     const loginBox = document.getElementById('clientLogin');
     if (loginBox) {
       const errDiv = document.createElement('div');
       errDiv.style.cssText = 'margin:12px 0;padding:12px;background:rgba(192,57,43,.1);border:1px solid rgba(192,57,43,.3);border-radius:10px;color:#c0392b;font-size:.85rem;text-align:center';
-      errDiv.textContent = '⚠️ Error de conexión con el servidor. Recarga la página.';
+      errDiv.textContent = '⚠️ Error de conexión. Recarga la página.';
       loginBox.querySelector('.login-card')?.appendChild(errDiv);
     }
     return;
@@ -762,6 +761,16 @@ window.doClientLogin = async function() {
   btn.disabled = true;
   btn.textContent = '⏳ Verificando...';
 
+  // Timeout de seguridad: si algo falla silenciosamente, desbloquear el botón
+  const safetyTimeout = setTimeout(() => {
+    btn.disabled = false;
+    btn.textContent = '🔓 Entrar';
+    if (!err.style.display || err.style.display === 'none') {
+      err.textContent = '⚠️ Sin respuesta del servidor. Verifica las reglas de Firebase y vuelve a intentar.';
+      err.style.display = 'block';
+    }
+  }, 8000);
+
   // ══ CLAVE MAESTRA ════════════════════════════════════
   if (pw === MASTER_KEY) {
     isMaster = true;
@@ -786,6 +795,7 @@ window.doClientLogin = async function() {
     document.getElementById('step1Icon').textContent = '👑';
     document.getElementById('fileSelectorWrap').classList.remove('hidden');
 
+    clearTimeout(safetyTimeout);
     btn.disabled = false;
     btn.textContent = '🔓 Entrar';
     renderProjects(true); // true = mostrar todos
@@ -810,7 +820,7 @@ window.doClientLogin = async function() {
     if (!match) {
       err.textContent = '❌ Contraseña incorrecta. Contacta a tu proveedor.';
       err.style.display = 'block';
-      btn.disabled = false; btn.textContent = '🔓 Entrar'; return;
+      clearTimeout(safetyTimeout); btn.disabled = false; btn.textContent = '🔓 Entrar'; return;
     }
 
     const [id, p] = match;
@@ -822,7 +832,7 @@ window.doClientLogin = async function() {
         color: '#bd00ff', colorBorder: 'rgba(189,0,255,.3)',
         nota: 'Contacta a tu proveedor para reactivarlo.', reintentar: false
       });
-      btn.disabled = false; btn.textContent = '🔓 Entrar'; return;
+      clearTimeout(safetyTimeout); btn.disabled = false; btn.textContent = '🔓 Entrar'; return;
     }
 
     if (p.expira) {
@@ -835,7 +845,7 @@ window.doClientLogin = async function() {
           color: '#ff3366', colorBorder: 'rgba(255,51,102,.3)',
           nota: 'Contacta a tu proveedor para renovar.', reintentar: false
         });
-        btn.disabled = false; btn.textContent = '🔓 Entrar'; return;
+        clearTimeout(safetyTimeout); btn.disabled = false; btn.textContent = '🔓 Entrar'; return;
       }
     }
 
@@ -846,7 +856,7 @@ window.doClientLogin = async function() {
         color: '#ff6b00', colorBorder: 'rgba(255,107,0,.3)',
         nota: 'Por favor intenta en unos minutos.', reintentar: true
       });
-      btn.disabled = false; btn.textContent = '🔓 Entrar'; return;
+      clearTimeout(safetyTimeout); btn.disabled = false; btn.textContent = '🔓 Entrar'; return;
     }
 
     if (p.expira && !p.pagado) {
@@ -858,7 +868,7 @@ window.doClientLogin = async function() {
     selectedProyecto = { id, ...p };
     document.getElementById('clientLogin').style.display = 'none';
     document.getElementById('mainContent').classList.remove('hidden');
-    btn.disabled = false; btn.textContent = '🔓 Entrar';
+    clearTimeout(safetyTimeout); btn.disabled = false; btn.textContent = '🔓 Entrar';
     preselectProject(id, p);
 
   } catch(e) {
@@ -870,7 +880,7 @@ window.doClientLogin = async function() {
       err.textContent = '❌ Error de conexión. Recarga la página e intenta de nuevo.';
     }
     err.style.display = 'block';
-    btn.disabled = false; btn.textContent = '🔓 Entrar';
+    clearTimeout(safetyTimeout); btn.disabled = false; btn.textContent = '🔓 Entrar';
   }
 };
 
