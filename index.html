@@ -1006,61 +1006,76 @@ async function procesarCambios() {
 // IA — MÚLTIPLES MOTORES CON FALLBACK
 // ═══════════════════════════════════════
 // ════════════════════════════════════════════════
-// MOTOR IA — extracción robusta + múltiples APIs
+// MOTOR IA — Claude (Anthropic API)
 // ════════════════════════════════════════════════
 
-// Extrae el código limpio de cualquier respuesta de IA
 function extraerCodigo(raw, esHTML) {
   if (!raw || typeof raw !== 'string') return '';
   var t = raw;
 
-  // 1. Si viene como JSON (OpenAI / Pollinations), extraer el texto
+  // Si viene como JSON extraer el texto
   var trimmed = t.trim();
-  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+  if (trimmed.startsWith('{')) {
     try {
       var j = JSON.parse(trimmed);
-      // Formato OpenAI choices
-      if (j.choices && j.choices[0]) {
-        var msg = j.choices[0].message || j.choices[0];
-        t = msg.content || msg.text || '';
-      }
-      // Formato directo
-      else if (j.content)  t = typeof j.content === 'string' ? j.content : '';
-      else if (j.text)     t = j.text;
-      else if (j.response) t = j.response;
-      // Solo razonamiento sin código → descartar
-      else if (j.role === 'assistant' && j.reasoning_content && !j.content) return '';
+      if (j.content && Array.isArray(j.content)) {
+        t = j.content.filter(function(b){ return b.type === 'text'; }).map(function(b){ return b.text; }).join('');
+      } else if (j.choices && j.choices[0]) {
+        t = (j.choices[0].message || {}).content || '';
+      } else if (j.content) { t = typeof j.content === 'string' ? j.content : ''; }
+      else if (j.text) { t = j.text; }
       else t = '';
     } catch(e) { t = ''; }
-    if (!t) return '';
   }
 
-  // 2. Quitar bloques markdown ``` ```
-  t = t.replace(/^```(?:html|htm|js|css|javascript|typescript|xml)?\s*\n?/im, '')
+  // Quitar markdown fences
+  t = t.replace(/^```(?:html|htm|js|css|javascript|xml)?\s*\n?/im, '')
         .replace(/\n?```\s*$/im, '');
 
   if (esHTML) {
-    // 3. Buscar inicio real del HTML (ignorar texto explicativo previo)
     var startIdx = t.search(/<!DOCTYPE\s+html/i);
     if (startIdx < 0) startIdx = t.search(/<html[\s>]/i);
     if (startIdx > 0) t = t.substring(startIdx);
-
-    // 4. Cortar después de </html>
     var endIdx = t.search(/<\/html\s*>/i);
     if (endIdx > 0) t = t.substring(0, endIdx + 7);
   }
-
   return t.trim();
 }
 
-// Valida que el resultado tenga sentido
 function esValido(codigo, esHTML) {
   if (!codigo || codigo.length < 300) return false;
   if (esHTML && !/<[a-z]/i.test(codigo)) return false;
   return true;
 }
 
-// ── Motor 1: Gemini ──────────────────────────────
+// ── Motor principal: Claude API ──────────────────
+async function tryClaude(prompt, esHTML) {
+  try {
+    var r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 8000,
+        system: 'You are a senior web developer. Your task is to modify HTML/CSS/JS files as instructed. You MUST output ONLY the complete raw code — no explanations, no markdown fences, no backticks, no text before or after the code. ' + (esHTML ? 'Start your response directly with <!DOCTYPE html>.' : 'Output only the raw code.'),
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    if (r.ok) {
+      var d = await r.json();
+      var raw = (d.content && d.content[0] && d.content[0].text) || '';
+      var result = extraerCodigo(raw, esHTML);
+      if (esValido(result, esHTML)) { console.log('✅ Claude API OK'); return result; }
+      console.warn('Claude: resultado inválido, largo:', raw.length);
+    } else {
+      var err = await r.json().catch(function(){return{};});
+      console.warn('Claude HTTP ' + r.status + ':', (err.error && err.error.message) || '');
+    }
+  } catch(e) { console.warn('Claude:', e.message); }
+  return null;
+}
+
+// ── Fallback: Gemini ─────────────────────────────
 async function tryGemini(prompt, modelo, esHTML) {
   var keys = [
     'AIzaSyBauGqlSHSVpebCiESpFIZ7KCTKW9wHQPg',
@@ -1078,22 +1093,17 @@ async function tryGemini(prompt, modelo, esHTML) {
       });
       if (r.ok) {
         var d = await r.json();
-        var raw = (d.candidates && d.candidates[0] &&
-                   d.candidates[0].content &&
-                   d.candidates[0].content.parts &&
-                   d.candidates[0].content.parts[0].text) || '';
+        var raw = (d.candidates && d.candidates[0] && d.candidates[0].content &&
+                   d.candidates[0].content.parts && d.candidates[0].content.parts[0].text) || '';
         var result = extraerCodigo(raw, esHTML);
-        if (esValido(result, esHTML)) { console.log('✅ Gemini ' + modelo + ' key' + k); return result; }
-      } else {
-        var err = await r.json().catch(function(){return{};});
-        console.warn('Gemini ' + modelo + ' key' + k + ' HTTP ' + r.status + ':', (err.error && err.error.message) || '');
+        if (esValido(result, esHTML)) { console.log('✅ Gemini ' + modelo); return result; }
       }
-    } catch(e) { console.warn('Gemini ' + modelo + ' key' + k + ':', e.message); }
+    } catch(e) { console.warn('Gemini ' + modelo + ':', e.message); }
   }
   return null;
 }
 
-// ── Motor 2: Pollinations POST ───────────────────
+// ── Fallback: Pollinations ───────────────────────
 async function tryPollinations(prompt, modelo, esHTML) {
   try {
     var controller = new AbortController();
@@ -1104,12 +1114,10 @@ async function tryPollinations(prompt, modelo, esHTML) {
       signal: controller.signal,
       body: JSON.stringify({
         messages: [
-          { role: 'system', content: 'You are a senior web developer. You MUST output ONLY the raw complete code file. Never add explanations, markdown fences, or JSON wrappers. Start the response directly with the code.' },
+          { role: 'system', content: 'Output ONLY raw code. No explanations, no markdown, no backticks.' },
           { role: 'user', content: prompt }
         ],
-        model: modelo,
-        private: true,
-        temperature: 0.05
+        model: modelo, private: true, temperature: 0.05
       })
     });
     clearTimeout(tid);
@@ -1117,46 +1125,12 @@ async function tryPollinations(prompt, modelo, esHTML) {
       var raw = await r.text();
       var result = extraerCodigo(raw, esHTML);
       if (esValido(result, esHTML)) { console.log('✅ Pollinations ' + modelo); return result; }
-      else console.warn('Pollinations ' + modelo + ': resultado inválido (largo: ' + raw.length + ')');
-    } else {
-      console.warn('Pollinations ' + modelo + ' HTTP ' + r.status);
     }
   } catch(e) { console.warn('Pollinations ' + modelo + ':', e.message); }
   return null;
 }
 
-// ── Motor 3: Hugging Face (Qwen2.5-Coder) ───────
-async function tryHuggingFace(prompt, esHTML) {
-  try {
-    var controller = new AbortController();
-    var tid = setTimeout(function(){ controller.abort(); }, 40000);
-    var r = await fetch('https://api-inference.huggingface.co/models/Qwen/Qwen2.5-Coder-32B-Instruct/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: controller.signal,
-      body: JSON.stringify({
-        model: 'Qwen/Qwen2.5-Coder-32B-Instruct',
-        messages: [
-          { role: 'system', content: 'You are a web developer. Output ONLY the raw code, no explanations, no markdown.' },
-          { role: 'user', content: prompt }
-        ],
-        max_tokens: 8000,
-        temperature: 0.05,
-        stream: false
-      })
-    });
-    clearTimeout(tid);
-    if (r.ok) {
-      var d = await r.json();
-      var raw = (d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content) || '';
-      var result = extraerCodigo(raw, esHTML);
-      if (esValido(result, esHTML)) { console.log('✅ HuggingFace Qwen'); return result; }
-    }
-  } catch(e) { console.warn('HuggingFace:', e.message); }
-  return null;
-}
-
-// ── ORQUESTADOR PRINCIPAL ────────────────────────
+// ── ORQUESTADOR ──────────────────────────────────
 async function callPollinationsAI(instruccion, codigoActual, archivo) {
   var esHTML = archivo.endsWith('.html') || archivo.endsWith('.htm');
   var codigoCortado = codigoActual.length > 20000
@@ -1164,43 +1138,43 @@ async function callPollinationsAI(instruccion, codigoActual, archivo) {
     : codigoActual;
 
   var prompt =
-    'Modifica el siguiente archivo "' + archivo + '".\n' +
-    'INSTRUCCIÓN: ' + instruccion + '\n\n' +
-    'REGLAS ESTRICTAS:\n' +
-    '- Devuelve SOLO el código completo y funcional, sin ningún texto adicional\n' +
-    (esHTML ? '- El código DEBE empezar con <!DOCTYPE html>\n' : '') +
-    '- No uses markdown ni backticks\n' +
-    '- Aplica SOLO lo pedido, conserva todo lo demás exactamente igual\n\n' +
-    'CÓDIGO ACTUAL DEL ARCHIVO:\n' + codigoCortado;
+    'Modifica el archivo "' + archivo + '" con esta instrucción:\n' +
+    '"' + instruccion + '"\n\n' +
+    'REGLAS:\n' +
+    '- Devuelve SOLO el código completo modificado\n' +
+    (esHTML ? '- Empieza con <!DOCTYPE html>\n' : '') +
+    '- Sin markdown, sin backticks, sin explicaciones\n' +
+    '- Aplica SOLO lo pedido, conserva todo lo demás igual\n\n' +
+    'CÓDIGO ACTUAL:\n' + codigoCortado;
 
-  var resultado = null;
+  var r = null;
 
-  // 1️⃣ Gemini 2.0 Flash (más inteligente)
-  console.log('🤖 [1/5] Gemini 2.0 Flash...');
-  resultado = await tryGemini(prompt, 'gemini-2.0-flash', esHTML);
-  if (resultado) return resultado;
+  // 1️⃣ Claude (principal — siempre disponible)
+  console.log('🤖 [1] Claude API...');
+  r = await tryClaude(prompt, esHTML);
+  if (r) return r;
 
-  // 2️⃣ Gemini 1.5 Flash (más estable)
-  console.log('🤖 [2/5] Gemini 1.5 Flash...');
-  resultado = await tryGemini(prompt, 'gemini-1.5-flash', esHTML);
-  if (resultado) return resultado;
+  // 2️⃣ Gemini 2.0 Flash
+  console.log('🤖 [2] Gemini 2.0 Flash...');
+  r = await tryGemini(prompt, 'gemini-2.0-flash', esHTML);
+  if (r) return r;
 
-  // 3️⃣ Pollinations openai-large
-  console.log('🤖 [3/5] Pollinations openai-large...');
-  resultado = await tryPollinations(prompt, 'openai-large', esHTML);
-  if (resultado) return resultado;
+  // 3️⃣ Gemini 1.5 Flash
+  console.log('🤖 [3] Gemini 1.5 Flash...');
+  r = await tryGemini(prompt, 'gemini-1.5-flash', esHTML);
+  if (r) return r;
 
-  // 4️⃣ Pollinations openai
-  console.log('🤖 [4/5] Pollinations openai...');
-  resultado = await tryPollinations(prompt, 'openai', esHTML);
-  if (resultado) return resultado;
+  // 4️⃣ Pollinations openai-large
+  console.log('🤖 [4] Pollinations openai-large...');
+  r = await tryPollinations(prompt, 'openai-large', esHTML);
+  if (r) return r;
 
-  // 5️⃣ HuggingFace Qwen2.5-Coder (100% gratis, sin clave)
-  console.log('🤖 [5/5] HuggingFace Qwen2.5...');
-  resultado = await tryHuggingFace(prompt, esHTML);
-  if (resultado) return resultado;
+  // 5️⃣ Pollinations openai
+  console.log('🤖 [5] Pollinations openai...');
+  r = await tryPollinations(prompt, 'openai', esHTML);
+  if (r) return r;
 
-  throw new Error('Todos los motores IA fallaron. Revisa tu conexión e intenta en 1 minuto.');
+  throw new Error('Los motores IA no respondieron. Intenta de nuevo en 1 minuto.');
 }
 
 // ═══════════════════════════════════════
