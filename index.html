@@ -556,7 +556,8 @@ footer {
     <div style="background:rgba(192,57,43,.06);border:1.5px solid rgba(192,57,43,.2);border-radius:20px;padding:32px;text-align:center">
       <div style="font-size:2.5rem;margin-bottom:16px">😔</div>
       <h3 style="font-family:var(--fu);font-size:1.2rem;margin-bottom:10px">Algo salió mal</h3>
-      <p style="font-size:.88rem;color:var(--ink2);margin-bottom:20px" id="errMsg">Ocurrió un error inesperado.</p>
+      <p style="font-size:.88rem;color:var(--ink2);margin-bottom:12px" id="errMsg">Ocurrió un error inesperado.</p>
+      <div id="debugLog" style="display:none;text-align:left;background:#1a1814;border-radius:10px;padding:14px;margin-bottom:16px;font-family:monospace;font-size:.72rem;color:#9a9590;max-height:200px;overflow-y:auto;white-space:pre-wrap;word-break:break-all"></div>
       <button class="btn-sec" onclick="resetAll()">↩ Intentar de nuevo</button>
     </div>
   </div>
@@ -1008,31 +1009,34 @@ async function procesarCambios() {
 // IA — MÚLTIPLES MOTORES CON FALLBACK
 // ═══════════════════════════════════════
 // ════════════════════════════════════════════════
-// MOTOR IA — OpenRouter (principal) + fallbacks
+// MOTOR IA — OpenRouter con debug visible
 // ════════════════════════════════════════════════
+var _dbgLines = [];
+function dbg(msg) {
+  _dbgLines.push(msg);
+  console.log(msg);
+}
+function mostrarDebug() {
+  var el = document.getElementById('debugLog');
+  if (el) { el.style.display = 'block'; el.textContent = _dbgLines.join('\n'); }
+}
 
 function extraerCodigo(raw, esHTML) {
   if (!raw || typeof raw !== 'string') return '';
   var t = raw;
-
-  // Extraer de JSON si viene así
   var tr = t.trim();
   if (tr.startsWith('{')) {
     try {
       var j = JSON.parse(tr);
       if (j.choices && j.choices[0]) t = (j.choices[0].message || {}).content || '';
-      else if (j.content && Array.isArray(j.content)) t = j.content.filter(function(b){ return b.type==='text'; }).map(function(b){ return b.text; }).join('');
+      else if (j.content && Array.isArray(j.content)) t = j.content.filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('');
       else if (typeof j.content === 'string') t = j.content;
       else if (j.text) t = j.text;
       else t = '';
     } catch(e) { t = ''; }
   }
-
-  // Quitar markdown fences
-  t = t.replace(/^```(?:html|htm|js|css|javascript|xml)?\s*\n?/im, '').replace(/\n?```\s*$/im, '');
-
+  t = t.replace(/^```(?:html|htm|js|css|javascript|xml)?\s*\n?/im,'').replace(/\n?```\s*$/im,'');
   if (esHTML) {
-    // Extraer solo desde <!DOCTYPE html> hasta </html>
     var s = t.search(/<!DOCTYPE\s+html/i);
     if (s < 0) s = t.search(/<html[\s>]/i);
     if (s > 0) t = t.substring(s);
@@ -1043,96 +1047,98 @@ function extraerCodigo(raw, esHTML) {
 }
 
 function esValido(codigo, esHTML) {
-  if (!codigo || codigo.length < 500) return false;
-  if (esHTML && !/<!DOCTYPE|<html/i.test(codigo)) return false;
+  if (!codigo || codigo.length < 200) return false;
+  if (esHTML && !/<!DOCTYPE|<html|<body|<head/i.test(codigo)) return false;
   return true;
 }
 
-// ── OpenRouter (soporta CORS desde browser, modelos gratis) ──
 async function tryOpenRouter(prompt, esHTML) {
   var key = openrouterKey;
-  if (!key) { console.warn('OpenRouter: sin clave en Firebase (config/openrouter_key)'); return null; }
-  // Modelos gratuitos en orden de preferencia
+  if (!key) { dbg('❌ OpenRouter: sin clave'); return null; }
   var modelos = [
     'google/gemini-2.0-flash-exp:free',
     'google/gemini-flash-1.5:free',
+    'deepseek/deepseek-r1:free',
     'meta-llama/llama-3.3-70b-instruct:free',
+    'qwen/qwen-2.5-72b-instruct:free',
     'mistralai/mistral-7b-instruct:free'
   ];
   for (var i = 0; i < modelos.length; i++) {
+    dbg('🤖 OpenRouter → ' + modelos[i]);
     try {
       var ctrl = new AbortController();
-      var tid = setTimeout(function(){ ctrl.abort(); }, 35000);
-      var r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      var tid = setTimeout(function(){ ctrl.abort(); }, 50000);
+      var res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer ' + key,
-          'HTTP-Referer': 'https://synapse-cheats.github.io',
+          'HTTP-Referer': location.origin,
           'X-Title': 'Synapse Studio'
         },
         signal: ctrl.signal,
         body: JSON.stringify({
           model: modelos[i],
           messages: [
-            { role: 'system', content: 'You are a web developer. Output ONLY the complete raw code. No explanations, no markdown, no backticks. ' + (esHTML ? 'Start directly with <!DOCTYPE html>.' : '') },
+            { role: 'system', content: 'You are a web developer. Output ONLY the complete raw modified code. No explanations, no markdown fences, no backticks. ' + (esHTML ? 'Start directly with <!DOCTYPE html>.' : 'Output raw code only.') },
             { role: 'user', content: prompt }
           ],
           temperature: 0.05,
-          max_tokens: 8000
+          max_tokens: 16000
         })
       });
       clearTimeout(tid);
-      if (r.ok) {
-        var d = await r.json();
-        var raw = (d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content) || '';
-        var result = extraerCodigo(raw, esHTML);
-        if (esValido(result, esHTML)) { console.log('✅ OpenRouter ' + modelos[i]); return result; }
-        console.warn('OpenRouter ' + modelos[i] + ': respuesta inválida, largo=' + raw.length);
-      } else {
-        var err = await r.json().catch(function(){return{};});
-        console.warn('OpenRouter ' + modelos[i] + ' HTTP ' + r.status + ':', (err.error && err.error.message) || '');
+      var txt = await res.text();
+      dbg('  HTTP ' + res.status + ' | largo=' + txt.length);
+      if (!res.ok) {
+        var em = '';
+        try { em = JSON.parse(txt).error.message; } catch(e){}
+        dbg('  Error: ' + (em || txt.substring(0,120)));
+        continue;
       }
-    } catch(e) { console.warn('OpenRouter ' + modelos[i] + ':', e.message); }
+      var d; try { d = JSON.parse(txt); } catch(e){ dbg('  JSON error: ' + e.message); continue; }
+      if (d.error) { dbg('  API error: ' + (d.error.message || JSON.stringify(d.error))); continue; }
+      var raw = (d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content) || '';
+      dbg('  Contenido: ' + raw.length + ' chars');
+      var result = extraerCodigo(raw, esHTML);
+      dbg('  Código limpio: ' + result.length + ' chars');
+      if (esValido(result, esHTML)) { dbg('  ✅ VÁLIDO'); return result; }
+      dbg('  ⚠️ Inválido, siguiente modelo...');
+    } catch(e) {
+      if (e.name === 'AbortError') dbg('  ⏱ Timeout');
+      else dbg('  ❌ ' + e.message);
+    }
   }
   return null;
 }
 
-// ── Gemini directo (fallback, CORS permitido con API key) ──
 async function tryGemini(prompt, modelo, esHTML) {
-  var keys = [
-    'AIzaSyBauGqlSHSVpebCiESpFIZ7KCTKW9wHQPg',
-    'AIzaSyByS186sUBK8b4SZM2lNkU_O2QzIrDNp3Y'
-  ];
+  var keys = ['AIzaSyBauGqlSHSVpebCiESpFIZ7KCTKW9wHQPg','AIzaSyByS186sUBK8b4SZM2lNkU_O2QzIrDNp3Y'];
   for (var k = 0; k < keys.length; k++) {
+    dbg('🤖 Gemini ' + modelo + ' key' + k);
     try {
-      var r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + modelo + ':generateContent?key=' + keys[k], {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.05, maxOutputTokens: 8192 }
-        })
+      var res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + modelo + ':generateContent?key=' + keys[k], {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ contents:[{parts:[{text:prompt}]}], generationConfig:{temperature:0.05,maxOutputTokens:8192} })
       });
-      if (r.ok) {
-        var d = await r.json();
-        var raw = (d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts && d.candidates[0].content.parts[0].text) || '';
-        var result = extraerCodigo(raw, esHTML);
-        if (esValido(result, esHTML)) { console.log('✅ Gemini ' + modelo); return result; }
-      } else {
-        var errBody = await r.json().catch(function(){return{};});
-        console.warn('Gemini ' + modelo + ' k' + k + ' HTTP ' + r.status + ':', (errBody.error && errBody.error.message) || '');
-      }
-    } catch(e) { console.warn('Gemini ' + modelo + ' k' + k + ':', e.message); }
+      var txt = await res.text();
+      dbg('  HTTP ' + res.status + ' | largo=' + txt.length);
+      if (!res.ok) { dbg('  Error HTTP'); continue; }
+      var d; try { d = JSON.parse(txt); } catch(e){ continue; }
+      var raw = (d.candidates&&d.candidates[0]&&d.candidates[0].content&&d.candidates[0].content.parts&&d.candidates[0].content.parts[0].text)||'';
+      var result = extraerCodigo(raw, esHTML);
+      dbg('  Código: ' + result.length + ' chars');
+      if (esValido(result, esHTML)) { dbg('  ✅ VÁLIDO'); return result; }
+    } catch(e) { dbg('  ❌ ' + e.message); }
   }
   return null;
 }
 
-// ── ORQUESTADOR ──────────────────────────────────
 async function callPollinationsAI(instruccion, codigoActual, archivo) {
+  _dbgLines = [];
   var esHTML = archivo.endsWith('.html') || archivo.endsWith('.htm');
-  var codigoCortado = codigoActual.length > 20000
-    ? codigoActual.substring(0, 20000) + '\n<!-- [CÓDIGO TRUNCADO] -->'
+  var codigoCortado = codigoActual.length > 18000
+    ? codigoActual.substring(0, 18000) + '\n<!-- [TRUNCADO] -->'
     : codigoActual;
 
   var prompt =
@@ -1145,22 +1151,24 @@ async function callPollinationsAI(instruccion, codigoActual, archivo) {
 
   var r = null;
 
-  // 1️⃣ OpenRouter — soporta CORS, clave en Firebase
-  console.log('🤖 [1] OpenRouter...');
+  dbg('=== INICIO IA ===');
+  dbg('Archivo: ' + archivo + ' | esHTML: ' + esHTML);
+  dbg('Instrucción: ' + instruccion.substring(0,80));
+
   r = await tryOpenRouter(prompt, esHTML);
   if (r) return r;
 
-  // 2️⃣ Gemini 2.0 Flash
-  console.log('🤖 [2] Gemini 2.0 Flash...');
+  dbg('--- Fallback Gemini ---');
   r = await tryGemini(prompt, 'gemini-2.0-flash', esHTML);
   if (r) return r;
 
-  // 3️⃣ Gemini 1.5 Flash
-  console.log('🤖 [3] Gemini 1.5 Flash...');
   r = await tryGemini(prompt, 'gemini-1.5-flash', esHTML);
   if (r) return r;
 
-  throw new Error('Los motores IA no están disponibles. Ve al Panel Admin → Configuración y agrega una clave OpenRouter en el campo "openrouter_key".');
+  dbg('=== TODOS FALLARON ===');
+  mostrarDebug();
+  throw new Error('IA no disponible. Ver diagnóstico abajo ↓');
+}
 }
 
 // ═══════════════════════════════════════
