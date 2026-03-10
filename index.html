@@ -1043,17 +1043,38 @@ async function tryPollinations(prompt, modelo) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        messages: [{ role: 'system', content: 'Responde SOLO con el código completo modificado. NADA de markdown ni backticks.' },
-                   { role: 'user', content: prompt }],
-        model: modelo, private: true, seed: 42
+        messages: [
+          { role: 'system', content: 'You are a web developer. Output ONLY the raw modified code. No JSON, no markdown, no backticks, no explanations. Just the code.' },
+          { role: 'user', content: prompt }
+        ],
+        model: modelo, private: true, seed: 42,
+        jsonMode: false
       })
     });
     if (r.ok) {
-      var t = await r.text();
-      if (t && !t.trim().startsWith('<!DOCTYPE') === false || t.includes('<')) {
-        return limpiarCodigo(t);
+      var raw = await r.text();
+      // Si devuelve JSON, extraer el texto del content
+      if (raw.trim().startsWith('{') || raw.trim().startsWith('[')) {
+        try {
+          var j = JSON.parse(raw);
+          // Formato OpenAI
+          if (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) {
+            return limpiarCodigo(j.choices[0].message.content);
+          }
+          // Formato con content directo
+          if (j.content) return limpiarCodigo(typeof j.content === 'string' ? j.content : JSON.stringify(j.content));
+          // Formato con text
+          if (j.text) return limpiarCodigo(j.text);
+          // Ignorar JSON de razonamiento (role:assistant con reasoning_content)
+          if (j.role === 'assistant' && j.reasoning_content) {
+            console.warn('Pollinations devolvió solo razonamiento, descartando.');
+            return null;
+          }
+        } catch(pe) {}
+        return null; // JSON sin parsear = descartamos
       }
-      if (t && t.length > 100) return limpiarCodigo(t);
+      var t = limpiarCodigo(raw);
+      if (t && t.length > 200 && (t.includes('<') || t.includes('function'))) return t;
     }
   } catch(e) { console.warn('Pollinations ' + modelo + ':', e.message); }
   return null;
@@ -1061,11 +1082,15 @@ async function tryPollinations(prompt, modelo) {
 
 async function tryPollinationsGET(prompt) {
   try {
-    var encoded = encodeURIComponent(prompt.substring(0, 2000));
+    // GET solo para prompts muy cortos, usamos el prompt resumido
+    var resumen = 'Edit this HTML file. Apply change: ' + prompt.substring(0, 500);
+    var encoded = encodeURIComponent(resumen);
     var r = await fetch('https://text.pollinations.ai/' + encoded + '?model=openai&private=true');
     if (r.ok) {
-      var t = await r.text();
-      if (t && t.length > 100) return limpiarCodigo(t);
+      var raw = await r.text();
+      if (raw.trim().startsWith('{')) return null; // JSON = descartar
+      var t = limpiarCodigo(raw);
+      if (t && t.length > 200 && t.includes('<')) return t;
     }
   } catch(e) { console.warn('Pollinations GET:', e.message); }
   return null;
@@ -1075,7 +1100,11 @@ async function callPollinationsAI(instruccion, codigoActual, archivo) {
   var esHTML = archivo.endsWith('.html') || archivo.endsWith('.htm');
   var codigoCortado = codigoActual.substring(0, 22000) + (codigoActual.length > 22000 ? '\n... [código truncado]' : '');
 
-  var prompt = 'Eres un experto desarrollador web. Modifica el archivo "' + archivo + '" aplicando exactamente estas instrucciones:\n\n"' + instruccion + '"\n\nCÓDIGO ACTUAL:\n' + codigoCortado + '\n\nREGLAS:\n1. Responde ÚNICAMENTE con el código completo modificado, sin markdown ni backticks\n2. ' + (esHTML ? 'Empieza exactamente con <!DOCTYPE html>' : 'Devuelve el archivo completo') + '\n3. Aplica SOLO el cambio pedido\n4. Conserva TODA la funcionalidad y estructura existente';
+  var prompt = 'Modifica el archivo "' + archivo + '" con esta instrucción:\n"' + instruccion + '"\n\n' +
+    'CÓDIGO ACTUAL:\n' + codigoCortado + '\n\n' +
+    'RESPONDE ÚNICAMENTE con el código completo modificado. ' +
+    (esHTML ? 'Empieza con <!DOCTYPE html>. ' : '') +
+    'Sin markdown, sin backticks, sin explicaciones. Solo el código.';
 
   var resultado = null;
 
