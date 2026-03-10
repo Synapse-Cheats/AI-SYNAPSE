@@ -1057,9 +1057,6 @@ async function callPollinationsAI(instruccion, codigoActual, archivo) {
     }
   } catch(e) { console.warn('Pollinations falló:', e.message); }
 
-  throw new Error('La IA no está disponible en este momento. Espera 1 minuto e intenta de nuevo.');
-}
-
   throw new Error('La IA no está disponible en este momento. Espera 1-2 minutos e intenta de nuevo.');
 }
 
