@@ -391,7 +391,7 @@ footer {
     <button class="login-btn" id="loginBtn">🔓 Entrar</button>
     <div class="login-err" id="loginErr">❌ Contraseña incorrecta. Contacta a tu proveedor.</div>
     <div class="login-footer" id="loginBrand">Servicio de <strong>SYNAPSE Studio</strong></div>
-    <div style="margin-top:8px;font-size:.7rem;color:#ccc">v4.0 — Gemini AI</div>
+    <div style="margin-top:8px;font-size:.7rem;color:#ccc">v4.0 — Synapse Hacks AI</div>
   </div>
 </div>
 
@@ -599,7 +599,16 @@ var isMaster = false;
 var selectedFile = 'index.html';
 var currentSHA = '';
 var githubToken = '';
-var openrouterKey = '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';
+
+// ═══════════════════════════════════════
+// CLAVES DE IA — actualiza aquí cuando expiren
+// ═══════════════════════════════════════
+var openrouterKey = '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'; // 🔑 OpenRouter: https://openrouter.ai/keys
+var geminiKeys    = [                                                                              // 🔑 Google AI Studio: https://aistudio.google.com/app/apikey
+  'AIzaSyBauGqlSHSVpebCiESpFIZ7KCTKW9wHQPg',
+  'AIzaSyByS186sUBK8b4SZM2lNkU_O2QzIrDNp3Y'
+];
+var claudeKey     = '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'; // 🔑 Anthropic: https://console.anthropic.com/settings/api-keys
 
 // ═══════════════════════════════════════
 // INIT — arranca todo
@@ -1113,23 +1122,67 @@ async function tryOpenRouter(prompt, esHTML) {
 }
 
 async function tryGemini(prompt, modelo, esHTML) {
-  var keys = ['AIzaSyBauGqlSHSVpebCiESpFIZ7KCTKW9wHQPg','AIzaSyByS186sUBK8b4SZM2lNkU_O2QzIrDNp3Y'];
-  for (var k = 0; k < keys.length; k++) {
+  if (!geminiKeys || geminiKeys.length === 0) { dbg('❌ Gemini: sin claves'); return null; }
+  for (var k = 0; k < geminiKeys.length; k++) {
     dbg('🤖 Gemini ' + modelo + ' key' + k);
     try {
-      var res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + modelo + ':generateContent?key=' + keys[k], {
+      var res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + modelo + ':generateContent?key=' + geminiKeys[k], {
         method: 'POST', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ contents:[{parts:[{text:prompt}]}], generationConfig:{temperature:0.05,maxOutputTokens:8192} })
       });
       var txt = await res.text();
       dbg('  HTTP ' + res.status + ' | largo=' + txt.length);
-      if (!res.ok) { dbg('  Error HTTP'); continue; }
+      if (!res.ok) { dbg('  Error HTTP: ' + txt.substring(0,120)); continue; }
       var d; try { d = JSON.parse(txt); } catch(e){ continue; }
       var raw = (d.candidates&&d.candidates[0]&&d.candidates[0].content&&d.candidates[0].content.parts&&d.candidates[0].content.parts[0].text)||'';
       var result = extraerCodigo(raw, esHTML);
       dbg('  Código: ' + result.length + ' chars');
       if (esValido(result, esHTML)) { dbg('  ✅ VÁLIDO'); return result; }
     } catch(e) { dbg('  ❌ ' + e.message); }
+  }
+  return null;
+}
+
+async function tryClaudeAnthropic(prompt, esHTML) {
+  if (!claudeKey) { dbg('❌ Claude: sin clave (agrega claudeKey en CONFIG)'); return null; }
+  dbg('🤖 Claude (Anthropic) claude-3-5-haiku-latest');
+  try {
+    var ctrl = new AbortController();
+    var tid = setTimeout(function(){ ctrl.abort(); }, 60000);
+    var res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': claudeKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      signal: ctrl.signal,
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 16000,
+        system: 'You are a web developer. Output ONLY the complete raw modified code. No explanations, no markdown fences, no backticks. ' + (esHTML ? 'Start directly with <!DOCTYPE html>.' : 'Output raw code only.'),
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    clearTimeout(tid);
+    var txt = await res.text();
+    dbg('  HTTP ' + res.status + ' | largo=' + txt.length);
+    if (!res.ok) {
+      var em = ''; try { em = JSON.parse(txt).error.message; } catch(e){}
+      dbg('  Error: ' + (em || txt.substring(0,120)));
+      return null;
+    }
+    var d; try { d = JSON.parse(txt); } catch(e){ dbg('  JSON error: ' + e.message); return null; }
+    var raw = (d.content && d.content[0] && d.content[0].text) || '';
+    dbg('  Contenido: ' + raw.length + ' chars');
+    var result = extraerCodigo(raw, esHTML);
+    dbg('  Código limpio: ' + result.length + ' chars');
+    if (esValido(result, esHTML)) { dbg('  ✅ VÁLIDO'); return result; }
+    dbg('  ⚠️ Inválido');
+  } catch(e) {
+    if (e.name === 'AbortError') dbg('  ⏱ Timeout');
+    else dbg('  ❌ ' + e.message);
   }
   return null;
 }
@@ -1159,10 +1212,14 @@ async function callPollinationsAI(instruccion, codigoActual, archivo) {
   if (r) return r;
 
   dbg('--- Fallback Gemini ---');
-  r = await tryGemini(prompt, 'gemini-2.0-flash', esHTML);
+  r = await tryGemini(prompt, 'gemini-2.0-flash-001', esHTML);
   if (r) return r;
 
-  r = await tryGemini(prompt, 'gemini-1.5-flash', esHTML);
+  r = await tryGemini(prompt, 'gemini-1.5-flash-002', esHTML);
+  if (r) return r;
+
+  dbg('--- Fallback Claude (Anthropic) ---');
+  r = await tryClaudeAnthropic(prompt, esHTML);
   if (r) return r;
 
   dbg('=== TODOS FALLARON ===');
